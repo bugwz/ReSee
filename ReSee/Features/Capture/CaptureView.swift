@@ -60,7 +60,7 @@ struct CaptureView: View {
 
             HStack(spacing: 8) {
                 Circle()
-                    .fill(metrics.trackingQuality == .normal ? AppTheme.success : AppTheme.accent)
+                    .fill(metrics.trackingQuality == .normal ? AppTheme.success : AppTheme.highlight)
                     .frame(width: 8, height: 8)
                 Text(metrics.trackingQuality.title)
                     .font(.subheadline.weight(.semibold))
@@ -69,7 +69,7 @@ struct CaptureView: View {
             .frame(height: 42)
             .background(.ultraThinMaterial, in: Capsule())
         }
-        .foregroundStyle(.white)
+        .foregroundStyle(AppTheme.captureForeground)
     }
 
     private var guidancePanel: some View {
@@ -83,17 +83,22 @@ struct CaptureView: View {
             }
 
             ProgressView(value: metrics.coverage)
-                .tint(AppTheme.accent)
+                .tint(AppTheme.captureForeground)
 
             HStack(spacing: 18) {
                 Label("\(metrics.meshAnchorCount) 网格", systemImage: "square.3.layers.3d")
                 Label(metrics.supportsLiDAR ? "LiDAR" : "视觉定位", systemImage: "sensor.tag.radiowaves.forward")
             }
             .font(.caption)
-            .foregroundStyle(.secondary)
+            .foregroundStyle(AppTheme.captureForeground.opacity(0.72))
         }
+        .foregroundStyle(AppTheme.captureForeground)
         .padding(16)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 20))
+        .background(.black.opacity(0.42), in: RoundedRectangle(cornerRadius: 20))
+        .overlay {
+            RoundedRectangle(cornerRadius: 20)
+                .stroke(.white.opacity(0.14))
+        }
         .padding(.bottom, 18)
     }
 
@@ -102,7 +107,7 @@ struct CaptureView: View {
             VStack(alignment: .leading, spacing: 3) {
                 Text("正在记录")
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(AppTheme.captureForeground.opacity(0.72))
                 TimelineView(.periodic(from: startedAt, by: 1)) { context in
                     Text(context.date.timeIntervalSince(startedAt).formattedDuration)
                         .font(.title3.monospacedDigit().bold())
@@ -120,10 +125,11 @@ struct CaptureView: View {
                     .frame(height: 52)
             }
             .buttonStyle(.borderedProminent)
-            .tint(AppTheme.accent)
+            .tint(AppTheme.captureForeground)
+            .foregroundStyle(AppTheme.accent)
             .disabled(!canSave)
         }
-        .foregroundStyle(.white)
+        .foregroundStyle(AppTheme.captureForeground)
         .padding(.bottom, 8)
     }
 
@@ -163,4 +169,3 @@ struct CaptureMetrics: Equatable {
         }
     }
 }
-

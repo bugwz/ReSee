@@ -12,6 +12,7 @@ struct SceneLibraryView: View {
                 sceneList
             }
         }
+        .background(AppTheme.background)
         .navigationTitle("回见")
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
@@ -64,6 +65,9 @@ struct SceneLibraryView: View {
                 Text("向左滑动可删除本地场景索引。")
             }
         }
+        .scrollContentBackground(.hidden)
+        .background(AppTheme.background)
+        .listStyle(.insetGrouped)
         .navigationDestination(for: SpatialScene.self) { scene in
             SceneViewerView(scene: scene)
         }
@@ -104,4 +108,3 @@ extension TimeInterval {
         return String(format: "%02d:%02d", seconds / 60, seconds % 60)
     }
 }
-

@@ -25,6 +25,7 @@ struct RootView: View {
             }
         }
         .tint(AppTheme.accent)
+        .background(AppTheme.background.ignoresSafeArea())
         .fullScreenCover(isPresented: $isPresentingCapture) {
             CaptureView()
         }
@@ -42,7 +43,7 @@ private struct AboutView: View {
             VStack(alignment: .leading, spacing: 22) {
                 Image(systemName: "viewfinder.circle.fill")
                     .font(.system(size: 64))
-                    .foregroundStyle(AppTheme.accent)
+                    .foregroundStyle(AppTheme.highlight)
 
                 Text("再次走进，曾经在场的空间。")
                     .font(.largeTitle.bold())
@@ -59,6 +60,7 @@ private struct AboutView: View {
             }
             .padding(24)
         }
+        .background(AppTheme.groupedBackground)
         .navigationTitle("关于回见")
     }
 }
@@ -81,7 +83,10 @@ private struct InfoRow: View {
             Spacer()
         }
         .padding(16)
-        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 18))
+        .background(AppTheme.background, in: RoundedRectangle(cornerRadius: 18))
+        .overlay {
+            RoundedRectangle(cornerRadius: 18)
+                .stroke(AppTheme.border)
+        }
     }
 }
-

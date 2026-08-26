@@ -1,4 +1,8 @@
-# 回见
+<p align="center">
+  <img src="Docs/Assets/resee-logo.svg" width="240" alt="回见 Logo">
+</p>
+
+<h1 align="center">回见</h1>
 
 “回见”是一款面向 iPhone / iPad 的空间记录应用。它不是把用户固定在一个拍摄点的 360° 全景相册，而是以 **6DoF 空间记录**为目标：用户可以采集一个房间或点位，在有限的已采集范围内移动、旋转和缩放查看，并把文字、图片或语音信息绑定到空间中的物品。
 
@@ -101,7 +105,10 @@ title / note / mediaReferences
 5. 加入模型版本、标注迁移、离线下载和质量检测。
 6. 最后评估 SPZ / 3DGS 的移动端渲染与内存预算。
 
-## 许可证注意事项
+## 许可证
+
+本项目采用 [MIT License](LICENSE) 开源。
+
+### 第三方依赖注意事项
 
 本仓库当前只使用 Apple 原生框架。未来引入重建组件时应锁定具体版本并审查全部传递依赖：COLMAP（BSD-3-Clause）、Open3D（MIT）通常较易用于商业项目；OpenMVS（AGPL-3.0）、ORB-SLAM3（GPL-3.0）以及部分原始 3DGS 实现需要额外评估，不应默认可直接集成到闭源 App。
-

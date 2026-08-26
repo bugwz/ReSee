@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-labelledby="title description">
+  <title id="title">回见 ReSee 标志</title>
+  <desc id="description">纯白背景上的黑色开放立方空间。</desc>
+
+  <rect width="1024" height="1024" fill="#FFFFFF"/>
+
+  <g fill="#000000" transform="translate(179.2 179.2) scale(.65)">
+    <path d="M122 248 458 80a120 120 0 0 1 108 0l336 168c28 14 28 54 0 68L566 484a120 120 0 0 1-108 0L122 316c-28-14-28-54 0-68Z"/>
+    <path d="M72 372 424 548c28 14 46 43 46 74v330c0 38-40 62-74 45L60 829a82 82 0 0 1-46-74V423c0-43 30-68 58-51Z"/>
+    <path d="M952 372 600 548a82 82 0 0 0-46 74v330c0 38 40 62 74 45l336-168a82 82 0 0 0 46-74V423c0-43-30-68-58-51Z"/>
+  </g>
+</svg>

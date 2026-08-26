@@ -1,8 +1,9 @@
 // !$*UTF8*$!
 {
 	archiveVersion = 1;
-	classes = {};
-	objectVersion = 77;
+	classes = {
+	};
+	objectVersion = 71;
 	objects = {
 
 /* Begin PBXBuildFile section */
@@ -19,7 +20,6 @@
 		A0000000000000000000010B /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A0000000000000000000020B /* Assets.xcassets */; };
 		A0000000000000000000010C /* SpatialSceneTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0000000000000000000020D /* SpatialSceneTests.swift */; };
 		A0000000000000000000010D /* XCTest.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = A0000000000000000000020E /* XCTest.framework */; };
-		A0000000000000000000010E /* ReSee.app in Test Dependencies */ = {isa = PBXBuildFile; fileRef = A00000000000000000000210 /* ReSee.app */; settings = {ATTRIBUTES = (CodeSignOnCopy, ); }; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -52,8 +52,21 @@
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
-		A00000000000000000000401 /* Frameworks */ = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
-		A00000000000000000000402 /* Frameworks */ = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (A0000000000000000000010D /* XCTest.framework in Frameworks */,); runOnlyForDeploymentPostprocessing = 0; };
+		A00000000000000000000401 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A00000000000000000000402 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A0000000000000000000010D /* XCTest.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -67,27 +80,129 @@
 			);
 			sourceTree = "<group>";
 		};
-		A00000000000000000000702 /* ReSee */ = {isa = PBXGroup; children = (A00000000000000000000703 /* App */, A00000000000000000000704 /* Models */, A00000000000000000000705 /* Features */, A00000000000000000000709 /* Services */, A0000000000000000000070D /* Resources */,); path = ReSee; sourceTree = "<group>"; };
-		A00000000000000000000703 /* App */ = {isa = PBXGroup; children = (A00000000000000000000201, A00000000000000000000202, A00000000000000000000203,); path = App; sourceTree = "<group>"; };
-		A00000000000000000000704 /* Models */ = {isa = PBXGroup; children = (A00000000000000000000204, A00000000000000000000205,); path = Models; sourceTree = "<group>"; };
-		A00000000000000000000705 /* Features */ = {isa = PBXGroup; children = (A00000000000000000000706 /* Capture */, A00000000000000000000707 /* Library */, A00000000000000000000708 /* Viewer */,); path = Features; sourceTree = "<group>"; };
-		A00000000000000000000706 /* Capture */ = {isa = PBXGroup; children = (A00000000000000000000208, A00000000000000000000209,); path = Capture; sourceTree = "<group>"; };
-		A00000000000000000000707 /* Library */ = {isa = PBXGroup; children = (A00000000000000000000207,); path = Library; sourceTree = "<group>"; };
-		A00000000000000000000708 /* Viewer */ = {isa = PBXGroup; children = (A0000000000000000000020A,); path = Viewer; sourceTree = "<group>"; };
-		A00000000000000000000709 /* Services */ = {isa = PBXGroup; children = (A00000000000000000000206,); path = Services; sourceTree = "<group>"; };
-		A0000000000000000000070A /* ReSeeTests */ = {isa = PBXGroup; children = (A0000000000000000000020D,); path = ReSeeTests; sourceTree = "<group>"; };
-		A0000000000000000000070B /* Frameworks */ = {isa = PBXGroup; children = (A0000000000000000000020E,); name = Frameworks; sourceTree = "<group>"; };
-		A0000000000000000000070C /* Products */ = {isa = PBXGroup; children = (A00000000000000000000210, A00000000000000000000211,); name = Products; sourceTree = "<group>"; };
-		A0000000000000000000070D /* Resources */ = {isa = PBXGroup; children = (A0000000000000000000020B, A0000000000000000000020C,); path = Resources; sourceTree = "<group>"; };
+		A00000000000000000000702 /* ReSee */ = {
+			isa = PBXGroup;
+			children = (
+				A00000000000000000000703 /* App */,
+				A00000000000000000000704 /* Models */,
+				A00000000000000000000705 /* Features */,
+				A00000000000000000000709 /* Services */,
+				A0000000000000000000070D /* Resources */,
+			);
+			path = ReSee;
+			sourceTree = "<group>";
+		};
+		A00000000000000000000703 /* App */ = {
+			isa = PBXGroup;
+			children = (
+				A00000000000000000000201 /* ReSeeApp.swift */,
+				A00000000000000000000202 /* RootView.swift */,
+				A00000000000000000000203 /* AppTheme.swift */,
+			);
+			path = App;
+			sourceTree = "<group>";
+		};
+		A00000000000000000000704 /* Models */ = {
+			isa = PBXGroup;
+			children = (
+				A00000000000000000000204 /* SpatialScene.swift */,
+				A00000000000000000000205 /* SpatialAnnotation.swift */,
+			);
+			path = Models;
+			sourceTree = "<group>";
+		};
+		A00000000000000000000705 /* Features */ = {
+			isa = PBXGroup;
+			children = (
+				A00000000000000000000706 /* Capture */,
+				A00000000000000000000707 /* Library */,
+				A00000000000000000000708 /* Viewer */,
+			);
+			path = Features;
+			sourceTree = "<group>";
+		};
+		A00000000000000000000706 /* Capture */ = {
+			isa = PBXGroup;
+			children = (
+				A00000000000000000000208 /* CaptureView.swift */,
+				A00000000000000000000209 /* ARCaptureView.swift */,
+			);
+			path = Capture;
+			sourceTree = "<group>";
+		};
+		A00000000000000000000707 /* Library */ = {
+			isa = PBXGroup;
+			children = (
+				A00000000000000000000207 /* SceneLibraryView.swift */,
+			);
+			path = Library;
+			sourceTree = "<group>";
+		};
+		A00000000000000000000708 /* Viewer */ = {
+			isa = PBXGroup;
+			children = (
+				A0000000000000000000020A /* SceneViewerView.swift */,
+			);
+			path = Viewer;
+			sourceTree = "<group>";
+		};
+		A00000000000000000000709 /* Services */ = {
+			isa = PBXGroup;
+			children = (
+				A00000000000000000000206 /* SceneRepository.swift */,
+			);
+			path = Services;
+			sourceTree = "<group>";
+		};
+		A0000000000000000000070A /* ReSeeTests */ = {
+			isa = PBXGroup;
+			children = (
+				A0000000000000000000020D /* SpatialSceneTests.swift */,
+			);
+			path = ReSeeTests;
+			sourceTree = "<group>";
+		};
+		A0000000000000000000070B /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				A0000000000000000000020E /* XCTest.framework */,
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
+		A0000000000000000000070C /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				A00000000000000000000210 /* ReSee.app */,
+				A00000000000000000000211 /* ReSeeTests.xctest */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		A0000000000000000000070D /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				A0000000000000000000020B /* Assets.xcassets */,
+				A0000000000000000000020C /* Info.plist */,
+			);
+			path = Resources;
+			sourceTree = "<group>";
+		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
 		A00000000000000000000501 /* ReSee */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = A00000000000000000000802 /* Build configuration list for PBXNativeTarget "ReSee" */;
-			buildPhases = (A00000000000000000000411 /* Sources */, A00000000000000000000401 /* Frameworks */, A00000000000000000000421 /* Resources */,);
-			buildRules = ();
-			dependencies = ();
+			buildPhases = (
+				A00000000000000000000411 /* Sources */,
+				A00000000000000000000401 /* Frameworks */,
+				A00000000000000000000421 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
 			name = ReSee;
 			productName = ReSee;
 			productReference = A00000000000000000000210 /* ReSee.app */;
@@ -96,9 +211,16 @@
 		A00000000000000000000502 /* ReSeeTests */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = A00000000000000000000803 /* Build configuration list for PBXNativeTarget "ReSeeTests" */;
-			buildPhases = (A00000000000000000000412 /* Sources */, A00000000000000000000402 /* Frameworks */, A00000000000000000000422 /* Resources */,);
-			buildRules = ();
-			dependencies = (A00000000000000000000302 /* PBXTargetDependency */,);
+			buildPhases = (
+				A00000000000000000000412 /* Sources */,
+				A00000000000000000000402 /* Frameworks */,
+				A00000000000000000000422 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				A00000000000000000000302 /* PBXTargetDependency */,
+			);
 			name = ReSeeTests;
 			productName = ReSeeTests;
 			productReference = A00000000000000000000211 /* ReSeeTests.xctest */;
@@ -114,52 +236,279 @@
 				LastSwiftUpdateCheck = 2600;
 				LastUpgradeCheck = 2600;
 				TargetAttributes = {
-					A00000000000000000000501 = {CreatedOnToolsVersion = 26.0; };
-					A00000000000000000000502 = {CreatedOnToolsVersion = 26.0; TestTargetID = A00000000000000000000501; };
+					A00000000000000000000501 = {
+						CreatedOnToolsVersion = 26.0;
+					};
+					A00000000000000000000502 = {
+						CreatedOnToolsVersion = 26.0;
+						TestTargetID = A00000000000000000000501;
+					};
 				};
 			};
 			buildConfigurationList = A00000000000000000000801 /* Build configuration list for PBXProject "ReSee" */;
 			compatibilityVersion = "Xcode 16.0";
 			developmentRegion = zh_CN;
 			hasScannedForEncodings = 0;
-			knownRegions = (Base, zh_CN, en,);
+			knownRegions = (
+				Base,
+				zh_CN,
+				en,
+			);
 			mainGroup = A00000000000000000000701;
 			productRefGroup = A0000000000000000000070C /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
-			targets = (A00000000000000000000501 /* ReSee */, A00000000000000000000502 /* ReSeeTests */,);
+			targets = (
+				A00000000000000000000501 /* ReSee */,
+				A00000000000000000000502 /* ReSeeTests */,
+			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
-		A00000000000000000000421 /* Resources */ = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (A0000000000000000000010B /* Assets.xcassets in Resources */,); runOnlyForDeploymentPostprocessing = 0; };
-		A00000000000000000000422 /* Resources */ = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+		A00000000000000000000421 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A0000000000000000000010B /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A00000000000000000000422 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
-		A00000000000000000000411 /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (A00000000000000000000101, A00000000000000000000102, A00000000000000000000103, A00000000000000000000104, A00000000000000000000105, A00000000000000000000106, A00000000000000000000107, A00000000000000000000108, A00000000000000000000109, A0000000000000000000010A,); runOnlyForDeploymentPostprocessing = 0; };
-		A00000000000000000000412 /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (A0000000000000000000010C,); runOnlyForDeploymentPostprocessing = 0; };
+		A00000000000000000000411 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A00000000000000000000101 /* ReSeeApp.swift in Sources */,
+				A00000000000000000000102 /* RootView.swift in Sources */,
+				A00000000000000000000103 /* AppTheme.swift in Sources */,
+				A00000000000000000000104 /* SpatialScene.swift in Sources */,
+				A00000000000000000000105 /* SpatialAnnotation.swift in Sources */,
+				A00000000000000000000106 /* SceneRepository.swift in Sources */,
+				A00000000000000000000107 /* SceneLibraryView.swift in Sources */,
+				A00000000000000000000108 /* CaptureView.swift in Sources */,
+				A00000000000000000000109 /* ARCaptureView.swift in Sources */,
+				A0000000000000000000010A /* SceneViewerView.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A00000000000000000000412 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A0000000000000000000010C /* SpatialSceneTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
-		A00000000000000000000302 /* PBXTargetDependency */ = {isa = PBXTargetDependency; target = A00000000000000000000501 /* ReSee */; targetProxy = A00000000000000000000301 /* PBXContainerItemProxy */; };
+		A00000000000000000000302 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = A00000000000000000000501 /* ReSee */;
+			targetProxy = A00000000000000000000301 /* PBXContainerItemProxy */;
+		};
 /* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
-		A00000000000000000000901 /* Debug */ = {isa = XCBuildConfiguration; buildSettings = {ALWAYS_SEARCH_USER_PATHS = NO; CLANG_ENABLE_MODULES = YES; CLANG_ENABLE_OBJC_ARC = YES; CLANG_WARN_BOOL_CONVERSION = YES; CLANG_WARN_CONSTANT_CONVERSION = YES; CLANG_WARN_DOCUMENTATION_COMMENTS = YES; CLANG_WARN_EMPTY_BODY = YES; CLANG_WARN_ENUM_CONVERSION = YES; CLANG_WARN_INFINITE_RECURSION = YES; CLANG_WARN_INT_CONVERSION = YES; CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES; CLANG_WARN_UNREACHABLE_CODE = YES; COPY_PHASE_STRIP = NO; DEBUG_INFORMATION_FORMAT = dwarf; ENABLE_TESTABILITY = YES; GCC_C_LANGUAGE_STANDARD = gnu17; GCC_OPTIMIZATION_LEVEL = 0; GCC_PREPROCESSOR_DEFINITIONS = ("DEBUG=1", "$(inherited)",); IPHONEOS_DEPLOYMENT_TARGET = 17.0; MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE; ONLY_ACTIVE_ARCH = YES; SDKROOT = iphoneos; SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)"; SWIFT_OPTIMIZATION_LEVEL = "-Onone"; }; name = Debug; };
-		A00000000000000000000902 /* Release */ = {isa = XCBuildConfiguration; buildSettings = {ALWAYS_SEARCH_USER_PATHS = NO; CLANG_ENABLE_MODULES = YES; CLANG_ENABLE_OBJC_ARC = YES; CLANG_WARN_BOOL_CONVERSION = YES; CLANG_WARN_CONSTANT_CONVERSION = YES; CLANG_WARN_DOCUMENTATION_COMMENTS = YES; CLANG_WARN_EMPTY_BODY = YES; CLANG_WARN_ENUM_CONVERSION = YES; CLANG_WARN_INFINITE_RECURSION = YES; CLANG_WARN_INT_CONVERSION = YES; CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES; CLANG_WARN_UNREACHABLE_CODE = YES; COPY_PHASE_STRIP = NO; DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym"; ENABLE_NS_ASSERTIONS = NO; GCC_C_LANGUAGE_STANDARD = gnu17; IPHONEOS_DEPLOYMENT_TARGET = 17.0; MTL_ENABLE_DEBUG_INFO = NO; SDKROOT = iphoneos; SWIFT_COMPILATION_MODE = wholemodule; VALIDATE_PRODUCT = YES; }; name = Release; };
-		A00000000000000000000903 /* Debug */ = {isa = XCBuildConfiguration; buildSettings = {ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon; ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor; CODE_SIGN_STYLE = Automatic; CURRENT_PROJECT_VERSION = 1; DEVELOPMENT_ASSET_PATHS = ""; ENABLE_PREVIEWS = YES; GENERATE_INFOPLIST_FILE = NO; INFOPLIST_FILE = ReSee/Resources/Info.plist; INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES; INFOPLIST_KEY_UILaunchScreen_Generation = YES; LD_RUNPATH_SEARCH_PATHS = ("$(inherited)", "@executable_path/Frameworks",); MARKETING_VERSION = 0.1.0; PRODUCT_BUNDLE_IDENTIFIER = com.dabble.resee; PRODUCT_NAME = "$(TARGET_NAME)"; SUPPORTED_PLATFORMS = "iphoneos iphonesimulator"; SUPPORTS_MACCATALYST = NO; SWIFT_EMIT_LOC_STRINGS = YES; SWIFT_VERSION = 5.0; TARGETED_DEVICE_FAMILY = "1,2"; }; name = Debug; };
-		A00000000000000000000904 /* Release */ = {isa = XCBuildConfiguration; buildSettings = {ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon; ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor; CODE_SIGN_STYLE = Automatic; CURRENT_PROJECT_VERSION = 1; DEVELOPMENT_ASSET_PATHS = ""; ENABLE_PREVIEWS = YES; GENERATE_INFOPLIST_FILE = NO; INFOPLIST_FILE = ReSee/Resources/Info.plist; INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES; INFOPLIST_KEY_UILaunchScreen_Generation = YES; LD_RUNPATH_SEARCH_PATHS = ("$(inherited)", "@executable_path/Frameworks",); MARKETING_VERSION = 0.1.0; PRODUCT_BUNDLE_IDENTIFIER = com.dabble.resee; PRODUCT_NAME = "$(TARGET_NAME)"; SUPPORTED_PLATFORMS = "iphoneos iphonesimulator"; SUPPORTS_MACCATALYST = NO; SWIFT_EMIT_LOC_STRINGS = YES; SWIFT_VERSION = 5.0; TARGETED_DEVICE_FAMILY = "1,2"; }; name = Release; };
-		A00000000000000000000905 /* Debug */ = {isa = XCBuildConfiguration; buildSettings = {BUNDLE_LOADER = "$(TEST_HOST)"; CODE_SIGN_STYLE = Automatic; GENERATE_INFOPLIST_FILE = YES; IPHONEOS_DEPLOYMENT_TARGET = 17.0; LD_RUNPATH_SEARCH_PATHS = ("$(inherited)", "@executable_path/Frameworks", "@loader_path/Frameworks",); PRODUCT_BUNDLE_IDENTIFIER = com.dabble.resee.tests; PRODUCT_NAME = "$(TARGET_NAME)"; SWIFT_VERSION = 5.0; TARGETED_DEVICE_FAMILY = "1,2"; TEST_HOST = "$(BUILT_PRODUCTS_DIR)/ReSee.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/ReSee"; }; name = Debug; };
-		A00000000000000000000906 /* Release */ = {isa = XCBuildConfiguration; buildSettings = {BUNDLE_LOADER = "$(TEST_HOST)"; CODE_SIGN_STYLE = Automatic; GENERATE_INFOPLIST_FILE = YES; IPHONEOS_DEPLOYMENT_TARGET = 17.0; LD_RUNPATH_SEARCH_PATHS = ("$(inherited)", "@executable_path/Frameworks", "@loader_path/Frameworks",); PRODUCT_BUNDLE_IDENTIFIER = com.dabble.resee.tests; PRODUCT_NAME = "$(TARGET_NAME)"; SWIFT_VERSION = 5.0; TARGETED_DEVICE_FAMILY = "1,2"; TEST_HOST = "$(BUILT_PRODUCTS_DIR)/ReSee.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/ReSee"; }; name = Release; };
+		A00000000000000000000901 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+		A00000000000000000000902 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+		A00000000000000000000903 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_ASSET_PATHS = "";
+				DEVELOPMENT_TEAM = 9Z7J4MT2AP;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = ReSee/Resources/Info.plist;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.bugwz.resee;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		A00000000000000000000904 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_ASSET_PATHS = "";
+				DEVELOPMENT_TEAM = 9Z7J4MT2AP;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = ReSee/Resources/Info.plist;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.bugwz.resee;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		A00000000000000000000905 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.bugwz.resee.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/ReSee.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/ReSee";
+			};
+			name = Debug;
+		};
+		A00000000000000000000906 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.bugwz.resee.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/ReSee.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/ReSee";
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		A00000000000000000000801 /* Build configuration list for PBXProject "ReSee" */ = {isa = XCConfigurationList; buildConfigurations = (A00000000000000000000901 /* Debug */, A00000000000000000000902 /* Release */,); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
-		A00000000000000000000802 /* Build configuration list for PBXNativeTarget "ReSee" */ = {isa = XCConfigurationList; buildConfigurations = (A00000000000000000000903 /* Debug */, A00000000000000000000904 /* Release */,); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
-		A00000000000000000000803 /* Build configuration list for PBXNativeTarget "ReSeeTests" */ = {isa = XCConfigurationList; buildConfigurations = (A00000000000000000000905 /* Debug */, A00000000000000000000906 /* Release */,); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
+		A00000000000000000000801 /* Build configuration list for PBXProject "ReSee" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A00000000000000000000901 /* Debug */,
+				A00000000000000000000902 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		A00000000000000000000802 /* Build configuration list for PBXNativeTarget "ReSee" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A00000000000000000000903 /* Debug */,
+				A00000000000000000000904 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		A00000000000000000000803 /* Build configuration list for PBXNativeTarget "ReSeeTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A00000000000000000000905 /* Debug */,
+				A00000000000000000000906 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 /* End XCConfigurationList section */
 	};
 	rootObject = A00000000000000000000601 /* Project object */;
 }
-

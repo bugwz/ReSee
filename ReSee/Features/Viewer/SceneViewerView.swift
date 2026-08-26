@@ -12,6 +12,7 @@ struct SceneViewerView: View {
             }
             .padding(18)
         }
+        .background(AppTheme.groupedBackground)
         .navigationTitle(scene.name)
         .navigationBarTitleDisplayMode(.inline)
     }
@@ -19,14 +20,14 @@ struct SceneViewerView: View {
     private var modelPlaceholder: some View {
         ZStack {
             LinearGradient(
-                colors: [Color(red: 0.11, green: 0.15, blue: 0.19), Color(red: 0.2, green: 0.12, blue: 0.1)],
+                colors: [Color.white, Color(red: 0.96, green: 0.92, blue: 0.88)],
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
             )
             VStack(spacing: 14) {
                 Image(systemName: "cube.transparent.fill")
                     .font(.system(size: 58))
-                    .foregroundStyle(AppTheme.accent)
+                    .foregroundStyle(AppTheme.highlight)
                 Text("空间预览待生成")
                     .font(.title2.bold())
                 Text("当前已保存采集统计；下一阶段将接入网格文件持久化与 RealityKit 浏览。")
@@ -38,6 +39,10 @@ struct SceneViewerView: View {
         }
         .frame(height: 320)
         .clipShape(RoundedRectangle(cornerRadius: 28))
+        .overlay {
+            RoundedRectangle(cornerRadius: 28)
+                .stroke(AppTheme.border)
+        }
     }
 
     private var summaryGrid: some View {
@@ -63,7 +68,11 @@ struct SceneViewerView: View {
                     .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(18)
-                    .background(AppTheme.panel, in: RoundedRectangle(cornerRadius: 18))
+                    .background(AppTheme.background, in: RoundedRectangle(cornerRadius: 18))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 18)
+                            .stroke(AppTheme.border)
+                    }
             }
         }
     }
@@ -80,7 +89,10 @@ private struct MetricCard: View {
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 16)
-        .background(AppTheme.panel, in: RoundedRectangle(cornerRadius: 16))
+        .background(AppTheme.background, in: RoundedRectangle(cornerRadius: 16))
+        .overlay {
+            RoundedRectangle(cornerRadius: 16)
+                .stroke(AppTheme.border)
+        }
     }
 }
-
