@@ -1,7 +1,36 @@
 import SwiftUI
+import UIKit
+
+final class ReSeeAppDelegate: NSObject, UIApplicationDelegate {
+    static var supportedOrientations: UIInterfaceOrientationMask = .portrait
+
+    func application(
+        _ application: UIApplication,
+        supportedInterfaceOrientationsFor window: UIWindow?
+    ) -> UIInterfaceOrientationMask {
+        Self.supportedOrientations
+    }
+}
+
+@MainActor
+enum AppOrientationController {
+    static func request(_ orientations: UIInterfaceOrientationMask) {
+        ReSeeAppDelegate.supportedOrientations = orientations
+        guard let windowScene = UIApplication.shared.connectedScenes
+            .compactMap({ $0 as? UIWindowScene })
+            .first(where: { $0.activationState == .foregroundActive }) else { return }
+
+        windowScene.keyWindow?.rootViewController?
+            .setNeedsUpdateOfSupportedInterfaceOrientations()
+        windowScene.requestGeometryUpdate(
+            .iOS(interfaceOrientations: orientations)
+        ) { _ in }
+    }
+}
 
 @main
 struct ReSeeApp: App {
+    @UIApplicationDelegateAdaptor(ReSeeAppDelegate.self) private var appDelegate
     @StateObject private var sceneRepository = SceneRepository()
     @State private var isShowingLaunchScreen = true
     @State private var isLeavingLaunchScreen = false

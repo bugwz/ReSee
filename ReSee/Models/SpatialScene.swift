@@ -6,8 +6,10 @@ struct SpatialScene: Identifiable, Codable, Hashable {
     var createdAt: Date
     var updatedAt: Date
     var capture: CaptureSummary
+    var recordingType: RecordingType
     var modelVersion: String
     var annotations: [SpatialAnnotation]
+    var renderedScene: RenderedScene?
 
     init(
         id: UUID = UUID(),
@@ -15,17 +17,22 @@ struct SpatialScene: Identifiable, Codable, Hashable {
         createdAt: Date = .now,
         updatedAt: Date = .now,
         capture: CaptureSummary,
+        recordingType: RecordingType = .stationary,
         modelVersion: String = "capture-v1",
-        annotations: [SpatialAnnotation] = []
+        annotations: [SpatialAnnotation] = [],
+        renderedScene: RenderedScene? = nil
     ) {
         self.id = id
         self.name = name
         self.createdAt = createdAt
         self.updatedAt = updatedAt
         self.capture = capture
+        self.recordingType = recordingType
         self.modelVersion = modelVersion
         self.annotations = annotations
+        self.renderedScene = renderedScene
     }
+
 }
 
 struct CaptureSummary: Codable, Hashable {
@@ -33,13 +40,38 @@ struct CaptureSummary: Codable, Hashable {
     var meshAnchorCount: Int
     var supportsLiDAR: Bool
     var trackingQuality: TrackingQuality
+    var capturedFrameCount: Int
+    var viewpointCount: Int
+    var coverage: Double
+
+    init(
+        duration: TimeInterval,
+        meshAnchorCount: Int,
+        supportsLiDAR: Bool,
+        trackingQuality: TrackingQuality,
+        capturedFrameCount: Int = 0,
+        viewpointCount: Int = 0,
+        coverage: Double = 0
+    ) {
+        self.duration = duration
+        self.meshAnchorCount = meshAnchorCount
+        self.supportsLiDAR = supportsLiDAR
+        self.trackingQuality = trackingQuality
+        self.capturedFrameCount = capturedFrameCount
+        self.viewpointCount = viewpointCount
+        self.coverage = coverage
+    }
 
     static let empty = CaptureSummary(
         duration: 0,
         meshAnchorCount: 0,
         supportsLiDAR: false,
-        trackingQuality: .unavailable
+        trackingQuality: .unavailable,
+        capturedFrameCount: 0,
+        viewpointCount: 0,
+        coverage: 0
     )
+
 }
 
 enum TrackingQuality: String, Codable, Hashable {
@@ -55,4 +87,3 @@ enum TrackingQuality: String, Codable, Hashable {
         }
     }
 }
-

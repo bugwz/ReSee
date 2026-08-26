@@ -48,14 +48,14 @@ private struct AboutView: View {
                 Text("再次走进，曾经在场的空间。")
                     .font(.largeTitle.bold())
 
-                Text("回见使用 ARKit 记录设备运动、深度和空间结构，为每个房间、展位或设备点位建立可以回看的数字空间。")
+                Text("回见使用 ARKit 引导你覆盖空间方向，并在本地生成可以缩放、切换视角与固定点的浏览记录。连续自由移动的高精空间模型仍在开发中。")
                     .font(.title3)
                     .foregroundStyle(.secondary)
 
                 VStack(spacing: 12) {
-                    InfoRow(icon: "move.3d", title: "自由浏览", detail: "在已采集范围内移动、旋转与缩放")
-                    InfoRow(icon: "mappin.and.ellipse", title: "空间标注", detail: "将资料绑定到模型表面，而不是一张照片")
-                    InfoRow(icon: "lock.shield", title: "本地优先", detail: "首版场景索引保存在设备本地")
+                    InfoRow(icon: "arrow.triangle.2.circlepath", title: "全景浏览", detail: "自由环视、缩放画面与切换多个固定点")
+                    InfoRow(icon: "circle.dotted", title: "覆盖引导", detail: "显示当前位置、已记录方向和遗漏区域")
+                    InfoRow(icon: "lock.shield", title: "本地优先", detail: "场景索引和生成画面保存在设备本地")
                 }
             }
             .padding(24)

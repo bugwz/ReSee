@@ -25,10 +25,10 @@ struct SceneLibraryView: View {
             "保存出现问题",
             isPresented: Binding(
                 get: { repository.lastError != nil },
-                set: { _ in }
+                set: { if !$0 { repository.clearError() } }
             )
         ) {
-            Button("知道了", role: .cancel) {}
+            Button("知道了", role: .cancel) { repository.clearError() }
         } message: {
             Text(repository.lastError ?? "未知错误")
         }
@@ -38,7 +38,7 @@ struct SceneLibraryView: View {
         ContentUnavailableView {
             Label("还没有空间", systemImage: "cube.transparent")
         } description: {
-            Text("从一个房间、展位或设备点位开始，缓慢移动手机记录它的结构。")
+            Text("从一个房间、展位或设备点位开始，跟随方向指引完成记录。")
         } actions: {
             Button(action: startCapture) {
                 Label("开始第一次记录", systemImage: "viewfinder")
@@ -62,7 +62,7 @@ struct SceneLibraryView: View {
             } header: {
                 Text("我的空间")
             } footer: {
-                Text("向左滑动可删除本地场景索引。")
+                Text("向左滑动可删除本地场景和生成画面。")
             }
         }
         .scrollContentBackground(.hidden)
@@ -93,7 +93,7 @@ private struct SceneRow: View {
                 Text(scene.updatedAt.formatted(date: .abbreviated, time: .shortened))
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                Text("\(scene.capture.meshAnchorCount) 个网格区块 · \(scene.capture.duration.formattedDuration)")
+                Text("\(scene.recordingType.title) · \(scene.capture.viewpointCount) 个点位 · \(scene.capture.duration.formattedDuration)")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

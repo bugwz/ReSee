@@ -20,6 +20,9 @@
 		A0000000000000000000010B /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A0000000000000000000020B /* Assets.xcassets */; };
 		A0000000000000000000010C /* SpatialSceneTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0000000000000000000020D /* SpatialSceneTests.swift */; };
 		A0000000000000000000010D /* XCTest.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = A0000000000000000000020E /* XCTest.framework */; };
+		A0000000000000000000010F /* RecordingType.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000212 /* RecordingType.swift */; };
+		A00000000000000000000110 /* RenderedScene.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000213 /* RenderedScene.swift */; };
+		A00000000000000000000111 /* SceneRenderingService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000214 /* SceneRenderingService.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -49,6 +52,9 @@
 		A0000000000000000000020E /* XCTest.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = XCTest.framework; path = System/Library/Frameworks/XCTest.framework; sourceTree = SDKROOT; };
 		A00000000000000000000210 /* ReSee.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ReSee.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		A00000000000000000000211 /* ReSeeTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = ReSeeTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		A00000000000000000000212 /* RecordingType.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordingType.swift; sourceTree = "<group>"; };
+		A00000000000000000000213 /* RenderedScene.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RenderedScene.swift; sourceTree = "<group>"; };
+		A00000000000000000000214 /* SceneRenderingService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SceneRenderingService.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -107,6 +113,8 @@
 			children = (
 				A00000000000000000000204 /* SpatialScene.swift */,
 				A00000000000000000000205 /* SpatialAnnotation.swift */,
+				A00000000000000000000212 /* RecordingType.swift */,
+				A00000000000000000000213 /* RenderedScene.swift */,
 			);
 			path = Models;
 			sourceTree = "<group>";
@@ -150,6 +158,7 @@
 			isa = PBXGroup;
 			children = (
 				A00000000000000000000206 /* SceneRepository.swift */,
+				A00000000000000000000214 /* SceneRenderingService.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -298,6 +307,9 @@
 				A00000000000000000000108 /* CaptureView.swift in Sources */,
 				A00000000000000000000109 /* ARCaptureView.swift in Sources */,
 				A0000000000000000000010A /* SceneViewerView.swift in Sources */,
+				A0000000000000000000010F /* RecordingType.swift in Sources */,
+				A00000000000000000000110 /* RenderedScene.swift in Sources */,
+				A00000000000000000000111 /* SceneRenderingService.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
