@@ -125,6 +125,7 @@ enum CaptureMotionPhase: String, Codable, Hashable {
 
 struct CaptureProgressState: Equatable {
     static let targetCount = CaptureDirection.all.count
+    static let maximumCaptureDrift: Float = 0.12
 
     var recordingType: RecordingType
     var trackingQuality: TrackingQuality = .unavailable
@@ -140,6 +141,7 @@ struct CaptureProgressState: Equatable {
     var distanceFromActivePoint: Float = 0
     var meshAnchorCount = 0
     var supportsLiDAR = false
+    var isStableForCapture = false
 
     var overallCoverage: Double {
         let completed = completedViewpoints * Self.targetCount
@@ -165,8 +167,10 @@ struct CaptureProgressState: Equatable {
         }
 
         switch motionPhase {
-        case .scanning where distanceFromActivePoint > 0.45:
-            return "请回到当前点位，只转动身体和手机"
+        case .scanning where distanceFromActivePoint > Self.maximumCaptureDrift:
+            return "请把手机移回原点，以手机为轴转动"
+        case .scanning where !isStableForCapture:
+            return "对准后停稳手机，正在消除手持抖动"
         case .scanning where missingDirectionCount == 0:
             return "球面记录完整，正在准备生成"
         case .scanning:
@@ -227,6 +231,7 @@ struct CaptureProgressTracker {
         pitchRadians: Float,
         trackingQuality: TrackingQuality,
         meshAnchorCount: Int,
+        isStableForCapture: Bool = true,
         captureFrame: Bool = true
     ) -> Update {
         state.trackingQuality = trackingQuality
@@ -234,6 +239,7 @@ struct CaptureProgressTracker {
         state.currentYawRadians = yawRadians.normalizedAngle
         state.currentPitchRadians = pitchRadians
         state.meshAnchorCount = meshAnchorCount
+        state.isStableForCapture = isStableForCapture
 
         if activePointOrigin == nil, trackingQuality == .normal {
             activePointOrigin = position
@@ -264,7 +270,8 @@ struct CaptureProgressTracker {
         )
         state.currentDirectionID = nearest.id
 
-        guard state.distanceFromActivePoint <= 0.45,
+        guard state.distanceFromActivePoint <= CaptureProgressState.maximumCaptureDrift,
+              state.isStableForCapture,
               CaptureDirection.angularDistance(
                 fromYaw: state.currentYawRadians,
                 pitch: pitchRadians,
@@ -304,6 +311,98 @@ struct CaptureProgressTracker {
             capturedDirection: inserted ? nearest : nil,
             didComplete: false
         )
+    }
+}
+
+struct CaptureMotionStabilityTracker {
+    struct Result: Equatable {
+        var linearSpeed: Float
+        var angularSpeed: Float
+        var stableDuration: TimeInterval
+        var isReady: Bool
+    }
+
+    static let maximumLinearSpeed: Float = 0.06
+    static let maximumAngularSpeed: Float = 5 * .pi / 180
+    static let requiredStableDuration: TimeInterval = 0.28
+
+    private var previousTimestamp: TimeInterval?
+    private var previousPosition: Vector3?
+    private var previousForward: Vector3?
+    private var previousUp: Vector3?
+    private var stableSince: TimeInterval?
+    private var smoothedLinearSpeed: Float = 0
+    private var smoothedAngularSpeed: Float = 0
+
+    mutating func update(
+        timestamp: TimeInterval,
+        position: Vector3,
+        forward: Vector3,
+        up: Vector3 = Vector3(x: 0, y: 1, z: 0)
+    ) -> Result {
+        defer {
+            previousTimestamp = timestamp
+            previousPosition = position
+            previousForward = forward
+            previousUp = up
+        }
+        guard let previousTimestamp,
+              let previousPosition,
+              let previousForward,
+              let previousUp else {
+            stableSince = nil
+            return Result(
+                linearSpeed: 0,
+                angularSpeed: 0,
+                stableDuration: 0,
+                isReady: false
+            )
+        }
+
+        let elapsed = timestamp - previousTimestamp
+        guard elapsed > 0, elapsed < 0.25 else {
+            stableSince = nil
+            smoothedLinearSpeed = 0
+            smoothedAngularSpeed = 0
+            return Result(
+                linearSpeed: 0,
+                angularSpeed: 0,
+                stableDuration: 0,
+                isReady: false
+            )
+        }
+
+        let linearSpeed = position.distance(to: previousPosition) / Float(elapsed)
+        func angleBetween(_ lhs: Vector3, _ rhs: Vector3) -> Float {
+            let value = lhs.x * rhs.x + lhs.y * rhs.y + lhs.z * rhs.z
+            return acos(min(max(value, -1), 1))
+        }
+        let angularSpeed = max(
+            angleBetween(forward, previousForward),
+            angleBetween(up, previousUp)
+        ) / Float(elapsed)
+        let smoothing: Float = 0.28
+        smoothedLinearSpeed += (linearSpeed - smoothedLinearSpeed) * smoothing
+        smoothedAngularSpeed += (angularSpeed - smoothedAngularSpeed) * smoothing
+
+        let isInstantlyStable = smoothedLinearSpeed <= Self.maximumLinearSpeed
+            && smoothedAngularSpeed <= Self.maximumAngularSpeed
+        if isInstantlyStable {
+            stableSince = stableSince ?? timestamp
+        } else {
+            stableSince = nil
+        }
+        let stableDuration = stableSince.map { timestamp - $0 } ?? 0
+        return Result(
+            linearSpeed: smoothedLinearSpeed,
+            angularSpeed: smoothedAngularSpeed,
+            stableDuration: stableDuration,
+            isReady: stableDuration >= Self.requiredStableDuration
+        )
+    }
+
+    mutating func reset() {
+        self = CaptureMotionStabilityTracker()
     }
 }
 

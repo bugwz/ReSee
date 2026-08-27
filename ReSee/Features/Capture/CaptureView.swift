@@ -277,7 +277,7 @@ struct CaptureView: View {
                         coverage: 1
                     ),
                     recordingType: selectedType,
-                    modelVersion: "equirectangular-v1",
+                    modelVersion: "equirectangular-v3",
                     renderedScene: rendered
                 )
                 do {

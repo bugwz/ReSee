@@ -114,7 +114,54 @@ final class SpatialSceneTests: XCTestCase {
 
         XCTAssertNil(update.capturedDirection)
         XCTAssertEqual(update.state.capturedDirectionIDs.count, 1)
-        XCTAssertTrue(update.state.guidance.contains("回到当前点位"))
+        XCTAssertTrue(update.state.guidance.contains("手机移回原点"))
+    }
+
+    func testStationaryCaptureRejectsSmallHandheldParallaxDrift() {
+        var tracker = CaptureProgressTracker(recordingType: .stationary)
+        _ = capture(CaptureDirection.all[0], with: &tracker, at: .zero)
+        let update = capture(
+            CaptureDirection.all[1],
+            with: &tracker,
+            at: Vector3(
+                x: CaptureProgressState.maximumCaptureDrift + 0.01,
+                y: 0,
+                z: 0
+            )
+        )
+
+        XCTAssertNil(update.capturedDirection)
+        XCTAssertEqual(update.state.capturedDirectionIDs.count, 1)
+        XCTAssertTrue(update.state.guidance.contains("手机移回原点"))
+    }
+
+    func testMotionStabilityRequiresSustainedStillness() {
+        var stability = CaptureMotionStabilityTracker()
+        let forward = Vector3(x: 0, y: 0, z: 1)
+        var result = stability.update(
+            timestamp: 0,
+            position: .zero,
+            forward: forward
+        )
+        for index in 1...20 {
+            result = stability.update(
+                timestamp: Double(index) * 0.02,
+                position: Vector3(x: Float(index % 2) * 0.0001, y: 0, z: 0),
+                forward: forward
+            )
+        }
+        XCTAssertTrue(result.isReady)
+
+        result = stability.update(
+            timestamp: 0.42,
+            position: Vector3(x: 0.04, y: 0, z: 0),
+            forward: forward
+        )
+        XCTAssertFalse(result.isReady)
+        XCTAssertGreaterThan(
+            result.linearSpeed,
+            CaptureMotionStabilityTracker.maximumLinearSpeed
+        )
     }
 
     func testFixedPointTourRequiresMovementAndCompletesThreePanoramas() {
@@ -173,6 +220,27 @@ final class SpatialSceneTests: XCTestCase {
         XCTAssertEqual(
             SceneRenderingService.detectVerticalDirectionSign(in: reversedPitchFrames),
             -1
+        )
+    }
+
+    func testRenderingUsesRobustViewpointCenterAndPenalizesParallax() throws {
+        var frames = try makeSphericalFrames()
+        for index in frames.indices {
+            frames[index].position = Vector3(x: Float(index % 3) * 0.01, y: 0, z: 0)
+        }
+        frames[0].position = Vector3(x: 0.9, y: 0, z: 0)
+
+        let center = SceneRenderingService.robustViewpointCenter(in: frames)
+        XCTAssertEqual(center.x, 0.01, accuracy: 0.001)
+        XCTAssertGreaterThan(
+            SceneRenderingService.parallaxQualityWeight(
+                framePosition: center,
+                viewpointCenter: center
+            ),
+            SceneRenderingService.parallaxQualityWeight(
+                framePosition: Vector3(x: 0.1, y: 0, z: 0),
+                viewpointCenter: center
+            )
         )
     }
 
@@ -368,7 +436,7 @@ final class SpatialSceneTests: XCTestCase {
                     imageWidth: 64,
                     imageHeight: 48
                 ),
-                jpegData: try XCTUnwrap(image.jpegData(compressionQuality: 0.9))
+                imageData: try XCTUnwrap(image.jpegData(compressionQuality: 0.9))
             )
         }
     }

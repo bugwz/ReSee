@@ -42,7 +42,7 @@ actor SceneRenderingService {
         var intrinsics: SIMD4<Float>
         var sourceSize: SIMD2<UInt32>
         var verticalDirectionSign: Float
-        var padding: Float = 0
+        var qualityWeight: Float
     }
 
     private let fileManager: FileManager
@@ -52,7 +52,7 @@ actor SceneRenderingService {
     init(
         fileManager: FileManager = .default,
         rootURL: URL? = nil,
-        panoramaWidth: Int = 4096
+        panoramaWidth: Int = 6144
     ) {
         self.fileManager = fileManager
         self.rootURL = rootURL ?? SceneAssetStore.defaultRootURL(fileManager: fileManager)
@@ -112,7 +112,7 @@ actor SceneRenderingService {
                 isDirectory: true
             )
             try fileManager.createDirectory(at: pointURL, withIntermediateDirectories: true)
-            let panoramaURL = pointURL.appendingPathComponent("panorama.jpg")
+            let panoramaURL = pointURL.appendingPathComponent("panorama.heic")
 
             await progress(
                 0.08 + Double(viewpointIndex * framesPerPoint) / Double(expectedCount) * 0.82,
@@ -132,8 +132,8 @@ actor SceneRenderingService {
                     id: UUID(),
                     index: viewpointIndex,
                     name: "点位 \(viewpointIndex + 1)",
-                    position: pointFrames.first?.position ?? .zero,
-                    panoramaPath: "rendered/\(pointURL.lastPathComponent)/panorama.jpg",
+                    position: Self.robustViewpointCenter(in: pointFrames),
+                    panoramaPath: "rendered/\(pointURL.lastPathComponent)/panorama.heic",
                     sourceFrameCount: pointFrames.count
                 )
             )
@@ -180,21 +180,17 @@ actor SceneRenderingService {
             throw SceneRenderingError.shaderUnavailable
         }
         guard let clearFunction = library.makeFunction(name: "clearBlendTargets"),
-              let projectionFunction = library.makeFunction(name: "accumulateFrame"),
+              let selectionFunction = library.makeFunction(name: "recordBestFrame"),
+              let projectionFunction = library.makeFunction(name: "accumulateSelectedFrame"),
               let normalizationFunction = library.makeFunction(name: "normalizePanorama") else {
             throw SceneRenderingError.shaderUnavailable
         }
 
         let clearPipeline = try device.makeComputePipelineState(function: clearFunction)
+        let selectionPipeline = try device.makeComputePipelineState(function: selectionFunction)
         let projectionPipeline = try device.makeComputePipelineState(function: projectionFunction)
         let normalizationPipeline = try device.makeComputePipelineState(
             function: normalizationFunction
-        )
-        let panorama = try makeTexture(
-            device: device,
-            pixelFormat: .rgba8Unorm,
-            width: panoramaWidth,
-            height: panoramaWidth / 2
         )
         let accumulatedColor = try makeTexture(
             device: device,
@@ -202,7 +198,7 @@ actor SceneRenderingService {
             width: panoramaWidth,
             height: panoramaWidth / 2
         )
-        let accumulatedWeight = try makeTexture(
+        let bestWeight = try makeTexture(
             device: device,
             pixelFormat: .r16Float,
             width: panoramaWidth,
@@ -211,17 +207,14 @@ actor SceneRenderingService {
         try execute(
             commandQueue: commandQueue,
             pipeline: clearPipeline,
-            textures: [accumulatedColor, accumulatedWeight],
-            width: panorama.width,
-            height: panorama.height
+            textures: [accumulatedColor, bestWeight],
+            width: accumulatedColor.width,
+            height: accumulatedColor.height
         )
 
-        let textureLoader = MTKTextureLoader(device: device)
         let verticalDirectionSign = Self.detectVerticalDirectionSign(in: frames)
+        let viewpointCenter = Self.robustViewpointCenter(in: frames)
         for frame in frames {
-            guard !frame.jpegData.isEmpty else {
-                throw SceneRenderingError.invalidFrameData
-            }
             let calibration = frame.calibration
             guard calibration.cameraTransform.count == 16,
                   calibration.intrinsics.count == 4,
@@ -230,12 +223,49 @@ actor SceneRenderingService {
                 throw SceneRenderingError.invalidCalibration
             }
 
+            let transform = calibration.cameraTransform
+            var parameters = ProjectionParameters(
+                worldToCameraRow0: SIMD4(transform[0], transform[1], transform[2], 0),
+                worldToCameraRow1: SIMD4(transform[4], transform[5], transform[6], 0),
+                worldToCameraRow2: SIMD4(transform[8], transform[9], transform[10], 0),
+                intrinsics: SIMD4(
+                    calibration.intrinsics[0],
+                    calibration.intrinsics[1],
+                    calibration.intrinsics[2],
+                    calibration.intrinsics[3]
+                ),
+                sourceSize: SIMD2(
+                    UInt32(calibration.imageWidth),
+                    UInt32(calibration.imageHeight)
+                ),
+                verticalDirectionSign: verticalDirectionSign,
+                qualityWeight: Self.parallaxQualityWeight(
+                    framePosition: frame.position,
+                    viewpointCenter: viewpointCenter
+                )
+            )
+            try execute(
+                commandQueue: commandQueue,
+                pipeline: selectionPipeline,
+                textures: [bestWeight],
+                width: accumulatedColor.width,
+                height: accumulatedColor.height,
+                parameters: &parameters
+            )
+        }
+
+        let textureLoader = MTKTextureLoader(device: device)
+        for frame in frames {
+            guard !frame.imageData.isEmpty else {
+                throw SceneRenderingError.invalidFrameData
+            }
+            let calibration = frame.calibration
             let source: MTLTexture
             do {
                 source = try textureLoader.newTexture(
-                    data: frame.jpegData,
+                    data: frame.imageData,
                     options: [
-                        .SRGB: false,
+                        .SRGB: true,
                         .origin: MTKTextureLoader.Origin.topLeft
                     ]
                 )
@@ -259,46 +289,52 @@ actor SceneRenderingService {
                     calibration.intrinsics[3]
                 ),
                 sourceSize: SIMD2(UInt32(source.width), UInt32(source.height)),
-                verticalDirectionSign: verticalDirectionSign
+                verticalDirectionSign: verticalDirectionSign,
+                qualityWeight: Self.parallaxQualityWeight(
+                    framePosition: frame.position,
+                    viewpointCenter: viewpointCenter
+                )
             )
             try execute(
                 commandQueue: commandQueue,
                 pipeline: projectionPipeline,
-                textures: [source, accumulatedColor, accumulatedWeight],
-                width: panorama.width,
-                height: panorama.height,
+                textures: [source, bestWeight, accumulatedColor],
+                width: accumulatedColor.width,
+                height: accumulatedColor.height,
                 parameters: &parameters
             )
         }
         try execute(
             commandQueue: commandQueue,
             pipeline: normalizationPipeline,
-            textures: [accumulatedColor, accumulatedWeight, panorama],
-            width: panorama.width,
-            height: panorama.height
+            textures: [accumulatedColor],
+            width: accumulatedColor.width,
+            height: accumulatedColor.height
         )
 
         let colorSpace = CGColorSpace(name: CGColorSpace.sRGB) ?? CGColorSpaceCreateDeviceRGB()
+        let linearColorSpace = CGColorSpace(name: CGColorSpace.linearSRGB) ?? colorSpace
         guard let image = CIImage(
-            mtlTexture: panorama,
-            options: [.colorSpace: colorSpace]
+            mtlTexture: accumulatedColor,
+            options: [.colorSpace: linearColorSpace]
         ) else {
             throw SceneRenderingError.panoramaCreationFailed
         }
         let sharpenedImage = image.applyingFilter(
             "CIUnsharpMask",
             parameters: [
-                kCIInputRadiusKey: 1.2,
-                kCIInputIntensityKey: 0.32
+                kCIInputRadiusKey: 0.8,
+                kCIInputIntensityKey: 0.42
             ]
         )
         let context = CIContext(mtlDevice: device)
         do {
-            try context.writeJPEGRepresentation(
+            try context.writeHEIFRepresentation(
                 of: sharpenedImage,
                 to: outputURL,
+                format: .RGBA8,
                 colorSpace: colorSpace,
-                options: [kCGImageDestinationLossyCompressionQuality as CIImageRepresentationOption: 0.94]
+                options: [kCGImageDestinationLossyCompressionQuality as CIImageRepresentationOption: 0.98]
             )
         } catch {
             throw SceneRenderingError.panoramaCreationFailed
@@ -336,6 +372,34 @@ actor SceneRenderingService {
             return result + expectedVertical * measuredVertical
         }
         return alignment < 0 ? -1 : 1
+    }
+
+    nonisolated static func robustViewpointCenter(
+        in frames: [CapturedFramePayload]
+    ) -> Vector3 {
+        guard !frames.isEmpty else { return .zero }
+        func median(_ values: [Float]) -> Float {
+            let sorted = values.sorted()
+            let middle = sorted.count / 2
+            if sorted.count.isMultiple(of: 2) {
+                return (sorted[middle - 1] + sorted[middle]) / 2
+            }
+            return sorted[middle]
+        }
+        return Vector3(
+            x: median(frames.map(\.position.x)),
+            y: median(frames.map(\.position.y)),
+            z: median(frames.map(\.position.z))
+        )
+    }
+
+    nonisolated static func parallaxQualityWeight(
+        framePosition: Vector3,
+        viewpointCenter: Vector3
+    ) -> Float {
+        let drift = framePosition.distance(to: viewpointCenter)
+        let normalized = drift / 0.08
+        return max(exp(-(normalized * normalized)), 0.2)
     }
 
     private func execute(
@@ -389,12 +453,12 @@ actor SceneRenderingService {
         float4 intrinsics;
         uint2 sourceSize;
         float verticalDirectionSign;
-        float padding;
+        float qualityWeight;
     };
 
     kernel void clearBlendTargets(
         texture2d<float, access::write> accumulatedColor [[texture(0)]],
-        texture2d<float, access::write> accumulatedWeight [[texture(1)]],
+        texture2d<float, access::write> bestWeight [[texture(1)]],
         uint2 position [[thread_position_in_grid]]
     ) {
         if (position.x >= accumulatedColor.get_width()
@@ -402,22 +466,36 @@ actor SceneRenderingService {
             return;
         }
         accumulatedColor.write(float4(0.0), position);
-        accumulatedWeight.write(float4(0.0), position);
+        bestWeight.write(float4(0.0), position);
     }
 
-    kernel void accumulateFrame(
-        texture2d<float, access::sample> source [[texture(0)]],
-        texture2d<float, access::read_write> accumulatedColor [[texture(1)]],
-        texture2d<float, access::read_write> accumulatedWeight [[texture(2)]],
-        constant PanoramaProjectionParameters &parameters [[buffer(0)]],
-        uint2 position [[thread_position_in_grid]]
+    inline float projectionWeight(
+        float pixelX,
+        float pixelY,
+        float depth,
+        uint2 sourceSize
     ) {
-        const uint width = accumulatedColor.get_width();
-        const uint height = accumulatedColor.get_height();
-        if (position.x >= width || position.y >= height) {
-            return;
-        }
+        const float edgeDistance = min(
+            min(pixelX, float(sourceSize.x - 1) - pixelX),
+            min(pixelY, float(sourceSize.y - 1) - pixelY)
+        );
+        const float featherWidth = max(
+            8.0,
+            float(min(sourceSize.x, sourceSize.y)) * 0.18
+        );
+        const float edgeWeight = smoothstep(0.0, featherWidth, edgeDistance);
+        const float axisWeight = pow(saturate(depth), 20.0);
+        return edgeWeight * axisWeight;
+    }
 
+    inline bool projectPanoramaPixel(
+        uint2 position,
+        uint width,
+        uint height,
+        constant PanoramaProjectionParameters &parameters,
+        thread float2 &sourcePixel,
+        thread float &weight
+    ) {
         const float longitude = ((float(position.x) + 0.5) / float(width))
             * 2.0 * M_PI_F - M_PI_F;
         const float latitude = (0.5 - (float(position.y) + 0.5) / float(height))
@@ -435,33 +513,81 @@ actor SceneRenderingService {
         );
         const float depth = -cameraDirection.z;
         if (depth <= 0.01) {
-            return;
+            return false;
         }
 
-        const float pixelX = parameters.intrinsics.x * cameraDirection.x / depth
-            + parameters.intrinsics.z;
-        const float pixelY = parameters.intrinsics.y * -cameraDirection.y / depth
-            + parameters.intrinsics.w;
-        if (pixelX < 1.0 || pixelY < 1.0
-            || pixelX >= float(parameters.sourceSize.x - 1)
-            || pixelY >= float(parameters.sourceSize.y - 1)) {
-            return;
+        sourcePixel = float2(
+            parameters.intrinsics.x * cameraDirection.x / depth + parameters.intrinsics.z,
+            parameters.intrinsics.y * -cameraDirection.y / depth + parameters.intrinsics.w
+        );
+        if (sourcePixel.x < 1.0 || sourcePixel.y < 1.0
+            || sourcePixel.x >= float(parameters.sourceSize.x - 1)
+            || sourcePixel.y >= float(parameters.sourceSize.y - 1)) {
+            return false;
         }
+        weight = projectionWeight(
+            sourcePixel.x,
+            sourcePixel.y,
+            depth,
+            parameters.sourceSize
+        );
+        weight *= parameters.qualityWeight;
+        return weight > 0.0001;
+    }
 
-        const float edgeDistance = min(
-            min(pixelX, float(parameters.sourceSize.x - 1) - pixelX),
-            min(pixelY, float(parameters.sourceSize.y - 1) - pixelY)
-        );
-        const float featherWidth = max(
-            8.0,
-            float(min(parameters.sourceSize.x, parameters.sourceSize.y)) * 0.24
-        );
-        const float edgeWeight = smoothstep(0.0, featherWidth, edgeDistance);
-        const float axisWeight = pow(saturate(depth), 28.0);
-        const float weight = edgeWeight * axisWeight;
-        if (weight <= 0.0001) {
+    kernel void recordBestFrame(
+        texture2d<float, access::read_write> bestWeight [[texture(0)]],
+        constant PanoramaProjectionParameters &parameters [[buffer(0)]],
+        uint2 position [[thread_position_in_grid]]
+    ) {
+        const uint width = bestWeight.get_width();
+        const uint height = bestWeight.get_height();
+        if (position.x >= width || position.y >= height) {
             return;
         }
+        float2 sourcePixel;
+        float weight;
+        if (projectPanoramaPixel(
+            position,
+            width,
+            height,
+            parameters,
+            sourcePixel,
+            weight
+        )) {
+            bestWeight.write(float4(max(bestWeight.read(position).r, weight)), position);
+        }
+    }
+
+    kernel void accumulateSelectedFrame(
+        texture2d<float, access::sample> source [[texture(0)]],
+        texture2d<float, access::read> bestWeight [[texture(1)]],
+        texture2d<float, access::read_write> accumulatedColor [[texture(2)]],
+        constant PanoramaProjectionParameters &parameters [[buffer(0)]],
+        uint2 position [[thread_position_in_grid]]
+    ) {
+        const uint width = accumulatedColor.get_width();
+        const uint height = accumulatedColor.get_height();
+        if (position.x >= width || position.y >= height) {
+            return;
+        }
+        float2 sourcePixel;
+        float weight;
+        if (!projectPanoramaPixel(
+            position,
+            width,
+            height,
+            parameters,
+            sourcePixel,
+            weight
+        )) {
+            return;
+        }
+        const float best = bestWeight.read(position).r;
+        if (best <= 0.0001) {
+            return;
+        }
+        const float blendWeight = pow(saturate(weight / best), 24.0);
 
         constexpr sampler imageSampler(
             coord::normalized,
@@ -469,35 +595,31 @@ actor SceneRenderingService {
             filter::linear
         );
         const float2 sourceCoordinate = float2(
-            (pixelX + 0.5) / float(parameters.sourceSize.x),
-            (pixelY + 0.5) / float(parameters.sourceSize.y)
+            (sourcePixel.x + 0.5) / float(parameters.sourceSize.x),
+            (sourcePixel.y + 0.5) / float(parameters.sourceSize.y)
         );
-        const float4 color = source.sample(imageSampler, sourceCoordinate);
+        const float3 color = source.sample(imageSampler, sourceCoordinate).rgb;
+        const float4 accumulated = accumulatedColor.read(position);
         accumulatedColor.write(
-            accumulatedColor.read(position) + color * weight,
-            position
-        );
-        accumulatedWeight.write(
-            accumulatedWeight.read(position) + float4(weight),
+            accumulated + float4(color * blendWeight, blendWeight),
             position
         );
     }
 
     kernel void normalizePanorama(
-        texture2d<float, access::read> accumulatedColor [[texture(0)]],
-        texture2d<float, access::read> accumulatedWeight [[texture(1)]],
-        texture2d<float, access::write> panorama [[texture(2)]],
+        texture2d<float, access::read_write> panorama [[texture(0)]],
         uint2 position [[thread_position_in_grid]]
     ) {
         if (position.x >= panorama.get_width() || position.y >= panorama.get_height()) {
             return;
         }
-        const float weight = accumulatedWeight.read(position).r;
+        const float4 accumulated = panorama.read(position);
+        const float weight = accumulated.a;
         if (weight <= 0.0001) {
             panorama.write(float4(0.0, 0.0, 0.0, 1.0), position);
             return;
         }
-        const float3 color = accumulatedColor.read(position).rgb / weight;
+        const float3 color = accumulated.rgb / weight;
         panorama.write(float4(color, 1.0), position);
     }
     """#

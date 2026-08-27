@@ -1,4 +1,5 @@
 import CoreMotion
+import ImageIO
 import SceneKit
 import SwiftUI
 import UIKit
@@ -402,7 +403,8 @@ private struct PanoramaSceneView: UIViewRepresentable {
     func makeUIView(context: Context) -> SCNView {
         let view = SCNView(frame: .zero)
         view.backgroundColor = .black
-        view.antialiasingMode = .multisampling2X
+        view.contentScaleFactor = UIScreen.main.scale
+        view.antialiasingMode = .multisampling4X
         view.isPlaying = true
         view.preferredFramesPerSecond = 60
         context.coordinator.configure(
@@ -463,7 +465,7 @@ private struct PanoramaSceneView: UIViewRepresentable {
         ) {
             let scene = SCNScene()
             let sphere = SCNSphere(radius: 10)
-            sphere.segmentCount = 256
+            sphere.segmentCount = 512
             sphere.isGeodesic = false
 
             let material = SCNMaterial()
@@ -475,6 +477,7 @@ private struct PanoramaSceneView: UIViewRepresentable {
             material.diffuse.magnificationFilter = .linear
             material.diffuse.minificationFilter = .linear
             material.diffuse.mipFilter = .linear
+            material.diffuse.maxAnisotropy = 16
             sphere.firstMaterial = material
 
             let sphereNode = SCNNode(geometry: sphere)
@@ -541,7 +544,13 @@ private struct PanoramaSceneView: UIViewRepresentable {
             currentURL = imageURL
             guard let material = view.scene?.rootNode.childNodes.first?
                 .geometry?.firstMaterial else { return }
-            material.diffuse.contents = UIImage(contentsOfFile: imageURL.path)
+            let options = [
+                kCGImageSourceShouldCache: true,
+                kCGImageSourceShouldCacheImmediately: true
+            ] as CFDictionary
+            guard let source = CGImageSourceCreateWithURL(imageURL as CFURL, options),
+                  let image = CGImageSourceCreateImageAtIndex(source, 0, options) else { return }
+            material.diffuse.contents = image
         }
 
         private func updateTextureOrientation(

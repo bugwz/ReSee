@@ -40,5 +40,5 @@ struct CapturedFramePayload: Identifiable, Hashable {
     var pitchDegrees: Float
     var position: Vector3
     var calibration: CameraCalibration
-    var jpegData: Data
+    var imageData: Data
 }
