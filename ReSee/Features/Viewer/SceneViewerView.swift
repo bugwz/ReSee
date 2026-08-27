@@ -480,8 +480,9 @@ private struct PanoramaSceneView: UIViewRepresentable {
             material.diffuse.maxAnisotropy = 16
             sphere.firstMaterial = material
 
+            // Front-face culling exposes the sphere interior. Reflecting the node here would
+            // reverse the longitude direction already established by the panorama renderer.
             let sphereNode = SCNNode(geometry: sphere)
-            sphereNode.scale = SCNVector3(-1, 1, 1)
             scene.rootNode.addChildNode(sphereNode)
 
             let camera = SCNCamera()
