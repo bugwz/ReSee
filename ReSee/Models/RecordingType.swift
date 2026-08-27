@@ -62,7 +62,7 @@ struct CaptureDirection: Identifiable, Hashable {
 
     static let all: [CaptureDirection] = {
         let bands: [(pitch: Float, count: Int)] = [
-            (-60, 8), (-30, 12), (0, 12), (30, 12), (60, 8)
+            (-75, 8), (-38, 12), (0, 12), (38, 12), (75, 8)
         ]
         var result: [CaptureDirection] = []
         for (bandIndex, band) in bands.enumerated() {
@@ -83,6 +83,23 @@ struct CaptureDirection: Identifiable, Hashable {
 
     static let bands: [[CaptureDirection]] = (0..<5).map { bandIndex in
         all.filter { $0.bandIndex == bandIndex }
+    }
+
+    /// A deterministic, row-by-row route that starts straight ahead and keeps
+    /// each successive target close to the previous one within a latitude band.
+    static let captureSequence: [CaptureDirection] = {
+        let orderedIDs = Array(20...31)
+            + Array((32...43).reversed())
+            + Array(44...51)
+            + Array((8...19).reversed())
+            + Array(0...7)
+        return orderedIDs.compactMap { id in
+            all.first { $0.id == id }
+        }
+    }()
+
+    static func nextUncaptured(in capturedDirectionIDs: Set<Int>) -> CaptureDirection? {
+        captureSequence.first { !capturedDirectionIDs.contains($0.id) }
     }
 
     static func nearest(yawRadians: Float, pitchRadians: Float) -> CaptureDirection {
@@ -136,12 +153,25 @@ struct CaptureProgressState: Equatable {
     var currentDirectionID: Int?
     var currentYawRadians: Float = 0
     var currentPitchRadians: Float = 0
+    var activeViewpointHeadingRadians: Float = 0
     var currentPosition: Vector3 = .zero
     var viewpointPositions: [Vector3] = []
     var distanceFromActivePoint: Float = 0
     var meshAnchorCount = 0
     var supportsLiDAR = false
     var isStableForCapture = false
+    var isPortraitCaptureOrientation = false
+
+    var currentTargetDirection: CaptureDirection? {
+        guard let currentDirectionID else { return nil }
+        return CaptureDirection.all.first { $0.id == currentDirectionID }
+    }
+
+    var currentTargetYawRadians: Float? {
+        currentTargetDirection.map {
+            ($0.yawRadians + activeViewpointHeadingRadians).normalizedAngle
+        }
+    }
 
     var overallCoverage: Double {
         let completed = completedViewpoints * Self.targetCount
@@ -165,6 +195,9 @@ struct CaptureProgressState: Equatable {
         if trackingQuality == .limited {
             return "对准有纹理的物体，避免快速晃动"
         }
+        if !isPortraitCaptureOrientation {
+            return "请竖直握持手机，不要横向拍摄"
+        }
 
         switch motionPhase {
         case .scanning where distanceFromActivePoint > Self.maximumCaptureDrift:
@@ -174,19 +207,7 @@ struct CaptureProgressState: Equatable {
         case .scanning where missingDirectionCount == 0:
             return "球面记录完整，正在准备生成"
         case .scanning:
-            let missing = CaptureDirection.all.filter { !capturedDirectionIDs.contains($0.id) }
-            let target = missing.min {
-                CaptureDirection.angularDistance(
-                    fromYaw: currentYawRadians,
-                    pitch: currentPitchRadians,
-                    to: $0
-                ) < CaptureDirection.angularDistance(
-                    fromYaw: currentYawRadians,
-                    pitch: currentPitchRadians,
-                    to: $1
-                )
-            }
-            guard let target else { return "保持手机平稳" }
+            guard let target = currentTargetDirection else { return "保持手机平稳" }
             let pitchDelta = target.pitchRadians - currentPitchRadians
             if pitchDelta > 0.24 {
                 return "抬高手机，对准高亮缺口"
@@ -232,6 +253,7 @@ struct CaptureProgressTracker {
         trackingQuality: TrackingQuality,
         meshAnchorCount: Int,
         isStableForCapture: Bool = true,
+        isPortraitCaptureOrientation: Bool = true,
         captureFrame: Bool = true
     ) -> Update {
         state.trackingQuality = trackingQuality
@@ -240,10 +262,12 @@ struct CaptureProgressTracker {
         state.currentPitchRadians = pitchRadians
         state.meshAnchorCount = meshAnchorCount
         state.isStableForCapture = isStableForCapture
+        state.isPortraitCaptureOrientation = isPortraitCaptureOrientation
 
         if activePointOrigin == nil, trackingQuality == .normal {
             activePointOrigin = position
             state.viewpointPositions = [position]
+            state.activeViewpointHeadingRadians = state.currentYawRadians
         }
         if let activePointOrigin {
             state.distanceFromActivePoint = position.distance(to: activePointOrigin)
@@ -259,35 +283,44 @@ struct CaptureProgressTracker {
             }
             activePointOrigin = position
             state.viewpointPositions.append(position)
+            state.activeViewpointHeadingRadians = state.currentYawRadians
             state.distanceFromActivePoint = 0
             state.motionPhase = .scanning
             state.capturedDirectionIDs = capturedByViewpoint[state.activeViewpointIndex]
         }
 
-        let nearest = CaptureDirection.nearest(
-            yawRadians: state.currentYawRadians,
-            pitchRadians: pitchRadians
-        )
-        state.currentDirectionID = nearest.id
+        let relativeYaw = (
+            state.currentYawRadians - state.activeViewpointHeadingRadians
+        ).normalizedAngle
+        guard let target = CaptureDirection.nextUncaptured(
+            in: capturedByViewpoint[state.activeViewpointIndex]
+        ) else {
+            return Update(state: state, didComplete: false)
+        }
+        state.currentDirectionID = target.id
 
         guard state.distanceFromActivePoint <= CaptureProgressState.maximumCaptureDrift,
               state.isStableForCapture,
+              state.isPortraitCaptureOrientation,
               CaptureDirection.angularDistance(
-                fromYaw: state.currentYawRadians,
+                fromYaw: relativeYaw,
                 pitch: pitchRadians,
-                to: nearest
+                to: target
               ) <= 14 * .pi / 180,
               captureFrame else {
             return Update(state: state, didComplete: false)
         }
 
-        let inserted = capturedByViewpoint[state.activeViewpointIndex].insert(nearest.id).inserted
+        let inserted = capturedByViewpoint[state.activeViewpointIndex].insert(target.id).inserted
         state.capturedDirectionIDs = capturedByViewpoint[state.activeViewpointIndex]
 
         guard state.capturedDirectionIDs.count == CaptureProgressState.targetCount else {
+            state.currentDirectionID = CaptureDirection.nextUncaptured(
+                in: state.capturedDirectionIDs
+            )?.id
             return Update(
                 state: state,
-                capturedDirection: inserted ? nearest : nil,
+                capturedDirection: inserted ? target : nil,
                 didComplete: false
             )
         }
@@ -297,7 +330,7 @@ struct CaptureProgressTracker {
             state.motionPhase = .complete
             return Update(
                 state: state,
-                capturedDirection: inserted ? nearest : nil,
+                capturedDirection: inserted ? target : nil,
                 didComplete: true
             )
         }
@@ -308,7 +341,7 @@ struct CaptureProgressTracker {
         state.currentDirectionID = nil
         return Update(
             state: state,
-            capturedDirection: inserted ? nearest : nil,
+            capturedDirection: inserted ? target : nil,
             didComplete: false
         )
     }
@@ -406,11 +439,16 @@ struct CaptureMotionStabilityTracker {
     }
 }
 
-private extension Float {
+extension Float {
     var normalizedAngle: Float {
         let circle = 2 * Float.pi
         let value = truncatingRemainder(dividingBy: circle)
         return value >= 0 ? value : value + circle
+    }
+
+    var shortestSignedAngle: Float {
+        let normalized = normalizedAngle
+        return normalized > .pi ? normalized - 2 * .pi : normalized
     }
 }
 

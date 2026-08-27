@@ -43,6 +43,7 @@ actor SceneRenderingService {
         var sourceSize: SIMD2<UInt32>
         var verticalDirectionSign: Float
         var qualityWeight: Float
+        var forwardHeadingRadians: Float
     }
 
     private let fileManager: FileManager
@@ -134,7 +135,9 @@ actor SceneRenderingService {
                     name: "点位 \(viewpointIndex + 1)",
                     position: Self.robustViewpointCenter(in: pointFrames),
                     panoramaPath: "rendered/\(pointURL.lastPathComponent)/panorama.heic",
-                    sourceFrameCount: pointFrames.count
+                    sourceFrameCount: pointFrames.count,
+                    forwardHeadingDegrees: Self.forwardHeadingRadians(in: pointFrames)
+                        * 180 / .pi
                 )
             )
         }
@@ -214,6 +217,7 @@ actor SceneRenderingService {
 
         let verticalDirectionSign = Self.detectVerticalDirectionSign(in: frames)
         let viewpointCenter = Self.robustViewpointCenter(in: frames)
+        let forwardHeadingRadians = Self.forwardHeadingRadians(in: frames)
         for frame in frames {
             let calibration = frame.calibration
             guard calibration.cameraTransform.count == 16,
@@ -242,7 +246,8 @@ actor SceneRenderingService {
                 qualityWeight: Self.parallaxQualityWeight(
                     framePosition: frame.position,
                     viewpointCenter: viewpointCenter
-                )
+                ),
+                forwardHeadingRadians: forwardHeadingRadians
             )
             try execute(
                 commandQueue: commandQueue,
@@ -293,7 +298,8 @@ actor SceneRenderingService {
                 qualityWeight: Self.parallaxQualityWeight(
                     framePosition: frame.position,
                     viewpointCenter: viewpointCenter
-                )
+                ),
+                forwardHeadingRadians: forwardHeadingRadians
             )
             try execute(
                 commandQueue: commandQueue,
@@ -393,6 +399,21 @@ actor SceneRenderingService {
         )
     }
 
+    nonisolated static func forwardHeadingRadians(
+        in frames: [CapturedFramePayload]
+    ) -> Float {
+        let offsets = frames.compactMap { frame -> Float? in
+            guard let direction = CaptureDirection.all.first(where: {
+                $0.id == frame.directionID
+            }) else { return nil }
+            return frame.yawDegrees * .pi / 180 - direction.yawRadians
+        }
+        guard !offsets.isEmpty else { return 0 }
+        let sine = offsets.reduce(Float.zero) { $0 + sin($1) }
+        let cosine = offsets.reduce(Float.zero) { $0 + cos($1) }
+        return atan2(sine, cosine).normalizedAngle
+    }
+
     nonisolated static func parallaxQualityWeight(
         framePosition: Vector3,
         viewpointCenter: Vector3
@@ -454,6 +475,7 @@ actor SceneRenderingService {
         uint2 sourceSize;
         float verticalDirectionSign;
         float qualityWeight;
+        float forwardHeadingRadians;
     };
 
     kernel void clearBlendTargets(
@@ -497,7 +519,7 @@ actor SceneRenderingService {
         thread float &weight
     ) {
         const float longitude = ((float(position.x) + 0.5) / float(width))
-            * 2.0 * M_PI_F - M_PI_F;
+            * 2.0 * M_PI_F - M_PI_F + parameters.forwardHeadingRadians;
         const float latitude = (0.5 - (float(position.y) + 0.5) / float(height))
             * M_PI_F * parameters.verticalDirectionSign;
         const float horizontal = cos(latitude);

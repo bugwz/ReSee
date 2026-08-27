@@ -56,25 +56,78 @@ final class SpatialSceneTests: XCTestCase {
         XCTAssertThrowsError(try JSONDecoder().decode(SpatialScene.self, from: oldData))
     }
 
+    func testRenderedViewpointDefaultsMissingForwardHeading() throws {
+        let viewpoint = RenderedViewpoint(
+            id: UUID(),
+            index: 0,
+            name: "旧点位",
+            position: .zero,
+            panoramaPath: "rendered/viewpoint-00/panorama.heic",
+            sourceFrameCount: 52,
+            forwardHeadingDegrees: 37
+        )
+        var object = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: JSONEncoder().encode(viewpoint))
+                as? [String: Any]
+        )
+        object.removeValue(forKey: "forwardHeadingDegrees")
+        let oldData = try JSONSerialization.data(withJSONObject: object)
+
+        let decoded = try JSONDecoder().decode(RenderedViewpoint.self, from: oldData)
+        XCTAssertEqual(decoded.forwardHeadingDegrees, 0)
+    }
+
     func testSphericalCaptureGridContainsFiveBandsAnd52Targets() {
         XCTAssertEqual(CaptureDirection.all.count, 52)
         XCTAssertEqual(CaptureDirection.bands.map(\.count), [8, 12, 12, 12, 8])
         XCTAssertEqual(
             CaptureDirection.bands.map { Int($0[0].pitchDegrees.rounded()) },
-            [-60, -30, 0, 30, 60]
+            [-75, -38, 0, 38, 75]
         )
         XCTAssertEqual(Set(CaptureDirection.all.map(\.id)).count, 52)
+        XCTAssertEqual(CaptureDirection.captureSequence.count, 52)
+        XCTAssertEqual(Set(CaptureDirection.captureSequence.map(\.id)).count, 52)
+        XCTAssertEqual(CaptureDirection.captureSequence.first?.id, 20)
+    }
+
+    func testCaptureTargetOnlyAdvancesAfterCurrentTargetIsCaptured() {
+        var tracker = CaptureProgressTracker(recordingType: .stationary)
+        let first = CaptureDirection.captureSequence[0]
+        let second = CaptureDirection.captureSequence[1]
+
+        _ = tracker.update(
+            position: .zero,
+            yawRadians: first.yawRadians,
+            pitchRadians: first.pitchRadians,
+            trackingQuality: .normal,
+            meshAnchorCount: 0,
+            captureFrame: false
+        )
+
+        let observedAwayFromTarget = tracker.update(
+            position: .zero,
+            yawRadians: second.yawRadians,
+            pitchRadians: second.pitchRadians,
+            trackingQuality: .normal,
+            meshAnchorCount: 0
+        )
+        XCTAssertNil(observedAwayFromTarget.capturedDirection)
+        XCTAssertEqual(observedAwayFromTarget.state.currentDirectionID, first.id)
+
+        let captured = capture(first, with: &tracker, at: .zero)
+        XCTAssertEqual(captured.capturedDirection?.id, first.id)
+        XCTAssertEqual(captured.state.currentDirectionID, second.id)
     }
 
     func testStationaryCaptureCompletesOnlyAfterAllSphericalTargets() {
         var tracker = CaptureProgressTracker(recordingType: .stationary)
 
-        for direction in CaptureDirection.all.dropLast() {
+        for direction in CaptureDirection.captureSequence.dropLast() {
             XCTAssertFalse(capture(direction, with: &tracker, at: .zero).didComplete)
         }
         XCTAssertEqual(tracker.state.missingDirectionCount, 1)
 
-        let finalUpdate = capture(CaptureDirection.all.last!, with: &tracker, at: .zero)
+        let finalUpdate = capture(CaptureDirection.captureSequence.last!, with: &tracker, at: .zero)
         XCTAssertTrue(finalUpdate.didComplete)
         XCTAssertEqual(finalUpdate.state.motionPhase, .complete)
         XCTAssertEqual(finalUpdate.state.overallCoverage, 1)
@@ -82,7 +135,7 @@ final class SpatialSceneTests: XCTestCase {
 
     func testStationaryCaptureWaitsForSuccessfullyEncodedFrame() {
         var tracker = CaptureProgressTracker(recordingType: .stationary)
-        let direction = CaptureDirection.all[0]
+        let direction = CaptureDirection.captureSequence[0]
 
         let observation = tracker.update(
             position: .zero,
@@ -100,10 +153,55 @@ final class SpatialSceneTests: XCTestCase {
         XCTAssertEqual(captured.state.capturedDirectionIDs, [direction.id])
     }
 
+    func testCaptureRequiresPortraitPhoneOrientation() {
+        var tracker = CaptureProgressTracker(recordingType: .stationary)
+        let direction = CaptureDirection.captureSequence[0]
+
+        let rejected = tracker.update(
+            position: .zero,
+            yawRadians: direction.yawRadians,
+            pitchRadians: direction.pitchRadians,
+            trackingQuality: .normal,
+            meshAnchorCount: 0,
+            isPortraitCaptureOrientation: false
+        )
+
+        XCTAssertNil(rejected.capturedDirection)
+        XCTAssertTrue(rejected.state.guidance.contains("竖直握持"))
+    }
+
+    func testFirstCameraHeadingBecomesTheLocalPanoramaFront() {
+        let heading: Float = 1.1
+        var tracker = CaptureProgressTracker(recordingType: .stationary)
+        _ = tracker.update(
+            position: .zero,
+            yawRadians: heading,
+            pitchRadians: 0,
+            trackingQuality: .normal,
+            meshAnchorCount: 0,
+            captureFrame: false
+        )
+        let firstTarget = CaptureDirection.captureSequence[0]
+        let captured = tracker.update(
+            position: .zero,
+            yawRadians: heading + firstTarget.yawRadians,
+            pitchRadians: firstTarget.pitchRadians,
+            trackingQuality: .normal,
+            meshAnchorCount: 0
+        )
+
+        XCTAssertEqual(captured.capturedDirection?.id, firstTarget.id)
+        XCTAssertEqual(
+            captured.state.activeViewpointHeadingRadians,
+            heading,
+            accuracy: 0.001
+        )
+    }
+
     func testStationaryCaptureRejectsFrameAwayFromPoint() {
         var tracker = CaptureProgressTracker(recordingType: .stationary)
-        _ = capture(CaptureDirection.all[0], with: &tracker, at: .zero)
-        let direction = CaptureDirection.all[1]
+        _ = capture(CaptureDirection.captureSequence[0], with: &tracker, at: .zero)
+        let direction = CaptureDirection.captureSequence[1]
         let update = tracker.update(
             position: Vector3(x: 0.7, y: 0, z: 0),
             yawRadians: direction.yawRadians,
@@ -119,9 +217,9 @@ final class SpatialSceneTests: XCTestCase {
 
     func testStationaryCaptureRejectsSmallHandheldParallaxDrift() {
         var tracker = CaptureProgressTracker(recordingType: .stationary)
-        _ = capture(CaptureDirection.all[0], with: &tracker, at: .zero)
+        _ = capture(CaptureDirection.captureSequence[0], with: &tracker, at: .zero)
         let update = capture(
-            CaptureDirection.all[1],
+            CaptureDirection.captureSequence[1],
             with: &tracker,
             at: Vector3(
                 x: CaptureProgressState.maximumCaptureDrift + 0.01,
@@ -223,6 +321,21 @@ final class SpatialSceneTests: XCTestCase {
         )
     }
 
+    func testRenderingRecoversTheStartingHeadingAsPanoramaFront() throws {
+        let heading: Float = 47 * .pi / 180
+        let frames = try makeSphericalFrames().map { frame in
+            var shifted = frame
+            shifted.yawDegrees += heading * 180 / .pi
+            return shifted
+        }
+
+        XCTAssertEqual(
+            SceneRenderingService.forwardHeadingRadians(in: frames),
+            heading,
+            accuracy: 0.001
+        )
+    }
+
     func testRenderingUsesRobustViewpointCenterAndPenalizesParallax() throws {
         var frames = try makeSphericalFrames()
         for index in frames.indices {
@@ -283,6 +396,22 @@ final class SpatialSceneTests: XCTestCase {
             }
         }
         XCTAssertGreaterThan(coloredPixels, image.width * image.height / 2)
+        for y in [0, 1, image.height - 2, image.height - 1] {
+            let coloredEdgePixels = (0..<image.width).reduce(into: 0) { count, x in
+                let index = (y * image.width + x) * 4
+                let brightness = Int(bytes[index])
+                    + Int(bytes[index + 1])
+                    + Int(bytes[index + 2])
+                if brightness > 24 {
+                    count += 1
+                }
+            }
+            XCTAssertGreaterThan(
+                coloredEdgePixels,
+                image.width * 9 / 10,
+                "全景顶部和底部不应出现未覆盖的黑边"
+            )
+        }
         XCTAssertTrue(FileManager.default.fileExists(
             atPath: root.appendingPathComponent(sceneID.uuidString)
                 .appendingPathComponent("rendered/scene.json").path
@@ -294,7 +423,9 @@ final class SpatialSceneTests: XCTestCase {
         defer { try? FileManager.default.removeItem(at: root) }
         let sceneID = UUID()
         let frames = try makeSphericalFrames { direction in
-            direction.id.isMultiple(of: 2) ? .black : .white
+            direction.id.isMultiple(of: 2)
+                ? UIColor(red: 0.02, green: 0.01, blue: 0.03, alpha: 1)
+                : UIColor(red: 0.98, green: 0.99, blue: 0.97, alpha: 1)
         }
 
         let rendered = try await SceneRenderingService(
@@ -392,7 +523,7 @@ final class SpatialSceneTests: XCTestCase {
     }
 
     private func scanSphere(with tracker: inout CaptureProgressTracker, at position: Vector3) {
-        for direction in CaptureDirection.all {
+        for direction in CaptureDirection.captureSequence {
             _ = capture(direction, with: &tracker, at: position)
         }
     }

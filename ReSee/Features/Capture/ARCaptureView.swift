@@ -5,9 +5,15 @@ import RealityKit
 import SwiftUI
 import UIKit
 
+final class CaptureTargetProjection: ObservableObject {
+    @Published var position: CGPoint?
+}
+
 struct ARCaptureView: UIViewRepresentable {
     let recordingType: RecordingType
     @Binding var progress: CaptureProgressState
+    let targetProjection: CaptureTargetProjection
+    let isCaptureEnabled: Bool
     let onFrameCaptured: (CapturedFramePayload) -> Void
     let onCompleted: () -> Void
     let onError: (String) -> Void
@@ -16,6 +22,7 @@ struct ARCaptureView: UIViewRepresentable {
         Coordinator(
             recordingType: recordingType,
             progress: $progress,
+            targetProjection: targetProjection,
             onFrameCaptured: onFrameCaptured,
             onCompleted: onCompleted,
             onError: onError
@@ -37,8 +44,7 @@ struct ARCaptureView: UIViewRepresentable {
         }
 
         let configuration = ARWorldTrackingConfiguration()
-        configuration.worldAlignment = .gravityAndHeading
-        configuration.environmentTexturing = .automatic
+        configuration.worldAlignment = .gravity
         if let highResolutionFormat = ARWorldTrackingConfiguration
             .recommendedVideoFormatForHighResolutionFrameCapturing {
             configuration.videoFormat = highResolutionFormat
@@ -47,23 +53,14 @@ struct ARCaptureView: UIViewRepresentable {
             configuration.videoFormat = format4K
         }
 
-        if ARWorldTrackingConfiguration.supportsSceneReconstruction(.meshWithClassification) {
-            configuration.sceneReconstruction = .meshWithClassification
-            view.debugOptions.insert(.showSceneUnderstanding)
-        } else if ARWorldTrackingConfiguration.supportsSceneReconstruction(.mesh) {
-            configuration.sceneReconstruction = .mesh
-            view.debugOptions.insert(.showSceneUnderstanding)
-        }
-
-        if ARWorldTrackingConfiguration.supportsFrameSemantics(.sceneDepth) {
-            configuration.frameSemantics.insert(.sceneDepth)
-        }
-
         view.session.run(configuration, options: [.resetTracking, .removeExistingAnchors])
         return view
     }
 
-    func updateUIView(_ uiView: ARView, context: Context) {}
+    func updateUIView(_ uiView: ARView, context: Context) {
+        context.coordinator.setCaptureEnabled(isCaptureEnabled)
+        context.coordinator.setViewportSize(uiView.bounds.size)
+    }
 
     static func dismantleUIView(_ uiView: ARView, coordinator: Coordinator) {
         uiView.session.pause()
@@ -76,9 +73,12 @@ struct ARCaptureView: UIViewRepresentable {
         )
 
         private var progress: Binding<CaptureProgressState>
+        private let targetProjection: CaptureTargetProjection
         private let onFrameCaptured: (CapturedFramePayload) -> Void
         private let onCompleted: () -> Void
         private let onError: (String) -> Void
+        private let recordingType: RecordingType
+        private let supportsLiDAR: Bool
         private let imageContext = CIContext(options: [.cacheIntermediates: false])
         private var tracker: CaptureProgressTracker
         private var lastUpdate = Date.distantPast
@@ -91,23 +91,62 @@ struct ARCaptureView: UIViewRepresentable {
             stableDuration: 0,
             isReady: false
         )
-        private var captureCandidates: [ARFrame] = []
+        private var isPortraitCaptureOrientation = false
+        private var isCaptureEnabled = false
+        private var viewportSize: CGSize = .zero
+        private var lastProjectionTimestamp: TimeInterval = 0
+        private var requestedCaptureEnabled = false
+        private var requestedViewportSize: CGSize = .zero
 
         init(
             recordingType: RecordingType,
             progress: Binding<CaptureProgressState>,
+            targetProjection: CaptureTargetProjection,
             onFrameCaptured: @escaping (CapturedFramePayload) -> Void,
             onCompleted: @escaping () -> Void,
             onError: @escaping (String) -> Void
         ) {
             self.progress = progress
+            self.targetProjection = targetProjection
+            self.recordingType = recordingType
             self.onFrameCaptured = onFrameCaptured
             self.onCompleted = onCompleted
             self.onError = onError
+            supportsLiDAR = ARWorldTrackingConfiguration.supportsSceneReconstruction(.mesh)
             tracker = CaptureProgressTracker(
                 recordingType: recordingType,
-                supportsLiDAR: ARWorldTrackingConfiguration.supportsSceneReconstruction(.mesh)
+                supportsLiDAR: supportsLiDAR
             )
+        }
+
+        func setCaptureEnabled(_ enabled: Bool) {
+            guard requestedCaptureEnabled != enabled else { return }
+            requestedCaptureEnabled = enabled
+            sessionQueue.async { [weak self] in
+                guard let self, isCaptureEnabled != enabled else { return }
+                isCaptureEnabled = enabled
+                cancelPendingCapture()
+                if enabled {
+                    tracker = CaptureProgressTracker(
+                        recordingType: recordingType,
+                        supportsLiDAR: supportsLiDAR
+                    )
+                    hasCompleted = false
+                    lastUpdate = .distantPast
+                } else {
+                    DispatchQueue.main.async { [weak self] in
+                        self?.targetProjection.position = nil
+                    }
+                }
+            }
+        }
+
+        func setViewportSize(_ size: CGSize) {
+            guard requestedViewportSize != size else { return }
+            requestedViewportSize = size
+            sessionQueue.async { [weak self] in
+                self?.viewportSize = size
+            }
         }
 
         func session(_ session: ARSession, didUpdate frame: ARFrame) {
@@ -118,6 +157,10 @@ struct ARCaptureView: UIViewRepresentable {
                 z: transform.columns.3.z
             )
             let forward = -transform.columns.2
+            isPortraitCaptureOrientation = Self.isPortraitCaptureOrientation(
+                transform: transform,
+                fallback: isPortraitCaptureOrientation
+            )
             latestStability = motionStabilityTracker.update(
                 timestamp: frame.timestamp,
                 position: position,
@@ -128,6 +171,12 @@ struct ARCaptureView: UIViewRepresentable {
                     z: transform.columns.1.z
                 )
             )
+
+            if isCaptureEnabled,
+               frame.timestamp - lastProjectionTimestamp >= 1.0 / 30.0 {
+                lastProjectionTimestamp = frame.timestamp
+                publishSpatialTarget(for: frame)
+            }
 
             guard !hasCompleted, Date.now.timeIntervalSince(lastUpdate) > 0.18 else { return }
             lastUpdate = .now
@@ -142,8 +191,9 @@ struct ARCaptureView: UIViewRepresentable {
                 yawRadians: yaw,
                 pitchRadians: pitch,
                 trackingQuality: quality,
-                meshAnchorCount: frame.anchors.lazy.filter { $0 is ARMeshAnchor }.count,
+                meshAnchorCount: 0,
                 isStableForCapture: latestStability.isReady,
+                isPortraitCaptureOrientation: isPortraitCaptureOrientation,
                 captureFrame: false
             )
 
@@ -151,14 +201,18 @@ struct ARCaptureView: UIViewRepresentable {
             let pendingDirection = pendingDirectionID.flatMap { id in
                 CaptureDirection.all.first { $0.id == id }
             }
-            let shouldCapture = quality == .normal
+            let shouldCapture = isCaptureEnabled
+                && quality == .normal
                 && update.state.motionPhase == .scanning
                 && update.state.distanceFromActivePoint
                     <= CaptureProgressState.maximumCaptureDrift
                 && latestStability.isReady
+                && isPortraitCaptureOrientation
                 && pendingDirection.map {
                     CaptureDirection.angularDistance(
-                        fromYaw: yaw,
+                        fromYaw: (
+                            yaw - update.state.activeViewpointHeadingRadians
+                        ).normalizedAngle,
                         pitch: pitch,
                         to: $0
                     ) <= 14 * .pi / 180
@@ -210,25 +264,11 @@ struct ARCaptureView: UIViewRepresentable {
             viewpointIndex: Int
         ) {
             isCapturingHighResolutionFrame = true
-            captureCandidates = []
-            requestCaptureCandidate(
-                from: session,
-                expectedDirection: expectedDirection,
-                viewpointIndex: viewpointIndex
-            )
-        }
-
-        private func requestCaptureCandidate(
-            from session: ARSession,
-            expectedDirection: CaptureDirection,
-            viewpointIndex: Int
-        ) {
-            session.captureHighResolutionFrame { [weak self, weak session] frame, _ in
+            session.captureHighResolutionFrame { [weak self] frame, _ in
                 guard let self else { return }
                 sessionQueue.async { [weak self] in
                     self?.handleCaptureCandidate(
                         frame,
-                        session: session,
                         expectedDirection: expectedDirection,
                         viewpointIndex: viewpointIndex
                     )
@@ -238,15 +278,18 @@ struct ARCaptureView: UIViewRepresentable {
 
         private func handleCaptureCandidate(
             _ frame: ARFrame?,
-            session: ARSession?,
             expectedDirection: CaptureDirection,
             viewpointIndex: Int
         ) {
             guard !hasCompleted,
+                  isCaptureEnabled,
                   let frame,
-                  let session,
                   frame.camera.trackingState.captureQuality == .normal,
                   latestStability.isReady,
+                  Self.isPortraitCaptureOrientation(
+                    transform: frame.camera.transform,
+                    fallback: isPortraitCaptureOrientation
+                  ),
                   tracker.state.activeViewpointIndex == viewpointIndex,
                   tracker.state.currentDirectionID == expectedDirection.id else {
                 cancelPendingCapture()
@@ -263,7 +306,9 @@ struct ARCaptureView: UIViewRepresentable {
             let yaw = atan2(forward.x, forward.z)
             let pitch = asin(min(max(forward.y, -1), 1))
             guard CaptureDirection.angularDistance(
-                fromYaw: yaw,
+                fromYaw: (
+                    yaw - tracker.state.activeViewpointHeadingRadians
+                ).normalizedAngle,
                 pitch: pitch,
                 to: expectedDirection
             ) <= 14 * .pi / 180,
@@ -273,23 +318,8 @@ struct ARCaptureView: UIViewRepresentable {
                 return
             }
 
-            captureCandidates.append(frame)
-            if captureCandidates.count < 2 {
-                requestCaptureCandidate(
-                    from: session,
-                    expectedDirection: expectedDirection,
-                    viewpointIndex: viewpointIndex
-                )
-                return
-            }
-
-            let selectedFrame = captureCandidates.max { lhs, rhs in
-                sharpnessScore(from: lhs.capturedImage)
-                    < sharpnessScore(from: rhs.capturedImage)
-            } ?? frame
-            captureCandidates = []
             finishHighResolutionCapture(
-                selectedFrame,
+                frame,
                 expectedDirection: expectedDirection,
                 viewpointIndex: viewpointIndex
             )
@@ -322,7 +352,12 @@ struct ARCaptureView: UIViewRepresentable {
                 trackingQuality: .normal,
                 meshAnchorCount: tracker.state.meshAnchorCount,
                 isStableForCapture: true,
+                isPortraitCaptureOrientation: true,
                 captureFrame: true
+            )
+            let projectedPosition = projectedTargetPosition(
+                for: frame,
+                state: update.state
             )
             guard let direction = update.capturedDirection else { return }
             let payload = CapturedFramePayload(
@@ -368,6 +403,7 @@ struct ARCaptureView: UIViewRepresentable {
             DispatchQueue.main.async { [weak self] in
                 guard let self else { return }
                 progress.wrappedValue = update.state
+                targetProjection.position = projectedPosition
                 onFrameCaptured(payload)
                 if update.didComplete {
                     onCompleted()
@@ -376,67 +412,82 @@ struct ARCaptureView: UIViewRepresentable {
         }
 
         private func cancelPendingCapture() {
-            captureCandidates = []
             isCapturingHighResolutionFrame = false
             motionStabilityTracker.reset()
         }
 
-        private func sharpnessScore(from pixelBuffer: CVPixelBuffer) -> Double {
-            let source = CIImage(cvPixelBuffer: pixelBuffer)
-            let targetWidth = 256
-            let scale = CGFloat(targetWidth) / source.extent.width
-            let targetHeight = max(Int((source.extent.height * scale).rounded()), 2)
-            let scaled = source.transformed(
-                by: CGAffineTransform(scaleX: scale, y: scale)
+        private func publishSpatialTarget(for frame: ARFrame) {
+            let position = projectedTargetPosition(for: frame, state: tracker.state)
+            DispatchQueue.main.async { [weak self] in
+                self?.targetProjection.position = position
+            }
+        }
+
+        private func projectedTargetPosition(
+            for frame: ARFrame,
+            state: CaptureProgressState
+        ) -> CGPoint? {
+            guard viewportSize.width > 0,
+                  viewportSize.height > 0,
+                  state.motionPhase == .scanning,
+                  let target = state.currentTargetDirection,
+                  state.viewpointPositions.indices.contains(state.activeViewpointIndex)
+            else { return nil }
+            let origin = state.viewpointPositions[state.activeViewpointIndex]
+
+            let worldYaw = target.yawRadians + state.activeViewpointHeadingRadians
+            let horizontal = cos(target.pitchRadians)
+            let targetPoint = SIMD3<Float>(
+                origin.x + horizontal * sin(worldYaw) * 4,
+                origin.y + sin(target.pitchRadians) * 4,
+                origin.z + horizontal * cos(worldYaw) * 4
             )
-            let colorSpace = CGColorSpace(name: CGColorSpace.sRGB)
-                ?? CGColorSpaceCreateDeviceRGB()
-            var pixels = [UInt8](
-                repeating: 0,
-                count: targetWidth * targetHeight * 4
+            let cameraPosition = SIMD3<Float>(
+                frame.camera.transform.columns.3.x,
+                frame.camera.transform.columns.3.y,
+                frame.camera.transform.columns.3.z
             )
-            pixels.withUnsafeMutableBytes { buffer in
-                guard let baseAddress = buffer.baseAddress else { return }
-                imageContext.render(
-                    scaled,
-                    toBitmap: baseAddress,
-                    rowBytes: targetWidth * 4,
-                    bounds: CGRect(x: 0, y: 0, width: targetWidth, height: targetHeight),
-                    format: .RGBA8,
-                    colorSpace: colorSpace
+            let cameraForward = -SIMD3<Float>(
+                frame.camera.transform.columns.2.x,
+                frame.camera.transform.columns.2.y,
+                frame.camera.transform.columns.2.z
+            )
+            let guideCenter = CGPoint(
+                x: viewportSize.width / 2,
+                y: viewportSize.height * 0.44
+            )
+            guard simd_dot(targetPoint - cameraPosition, cameraForward) > 0 else {
+                let currentYaw = atan2(cameraForward.x, cameraForward.z)
+                let currentPitch = asin(min(max(cameraForward.y, -1), 1))
+                let yawDelta = (worldYaw - currentYaw).shortestSignedAngle
+                let pitchDelta = target.pitchRadians - currentPitch
+                return CGPoint(
+                    x: guideCenter.x
+                        + CGFloat(yawDelta / (55 * .pi / 180)) * viewportSize.width / 2,
+                    y: guideCenter.y
+                        - CGFloat(pitchDelta / (72 * .pi / 180)) * viewportSize.height / 2
                 )
             }
 
-            var count = 0.0
-            var mean = 0.0
-            var sumOfSquares = 0.0
-            for y in 1..<(targetHeight - 1) {
-                for x in 1..<(targetWidth - 1) {
-                    let center = luminance(pixels, x: x, y: y, width: targetWidth)
-                    let laplacian = 4 * center
-                        - luminance(pixels, x: x - 1, y: y, width: targetWidth)
-                        - luminance(pixels, x: x + 1, y: y, width: targetWidth)
-                        - luminance(pixels, x: x, y: y - 1, width: targetWidth)
-                        - luminance(pixels, x: x, y: y + 1, width: targetWidth)
-                    count += 1
-                    let delta = laplacian - mean
-                    mean += delta / count
-                    sumOfSquares += delta * (laplacian - mean)
-                }
-            }
-            return count > 1 ? sumOfSquares / (count - 1) : 0
-        }
+            let projectedTarget = frame.camera.projectPoint(
+                targetPoint,
+                orientation: .portrait,
+                viewportSize: viewportSize
+            )
+            let projectedCenter = frame.camera.projectPoint(
+                cameraPosition + cameraForward * 4,
+                orientation: .portrait,
+                viewportSize: viewportSize
+            )
+            guard projectedTarget.x.isFinite,
+                  projectedTarget.y.isFinite,
+                  projectedCenter.x.isFinite,
+                  projectedCenter.y.isFinite else { return nil }
 
-        private func luminance(
-            _ pixels: [UInt8],
-            x: Int,
-            y: Int,
-            width: Int
-        ) -> Double {
-            let index = (y * width + x) * 4
-            return Double(pixels[index]) * 0.2126
-                + Double(pixels[index + 1]) * 0.7152
-                + Double(pixels[index + 2]) * 0.0722
+            return CGPoint(
+                x: guideCenter.x + projectedTarget.x - projectedCenter.x,
+                y: guideCenter.y + projectedTarget.y - projectedCenter.y
+            )
         }
 
         private func makeImageData(from pixelBuffer: CVPixelBuffer) -> Data? {
@@ -452,6 +503,18 @@ struct ARCaptureView: UIViewRepresentable {
                         as CIImageRepresentationOption: 0.98
                 ]
             )
+        }
+
+        private static func isPortraitCaptureOrientation(
+            transform: simd_float4x4,
+            fallback: Bool
+        ) -> Bool {
+            let verticalInImage = SIMD2<Float>(
+                transform.columns.0.y,
+                transform.columns.1.y
+            )
+            guard simd_length(verticalInImage) > 0.3 else { return fallback }
+            return abs(verticalInImage.x) > abs(verticalInImage.y)
         }
     }
 }
