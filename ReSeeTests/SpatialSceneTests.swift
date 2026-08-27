@@ -20,7 +20,8 @@ final class SpatialSceneTests: XCTestCase {
             name: "设备间",
             capture: CaptureSummary(
                 duration: 65, meshAnchorCount: 18, supportsLiDAR: true,
-                trackingQuality: .normal, capturedFrameCount: 52,
+                trackingQuality: .normal,
+                capturedFrameCount: CaptureProgressState.targetCount,
                 viewpointCount: 1, coverage: 1
             ),
             recordingType: .stationary,
@@ -34,7 +35,10 @@ final class SpatialSceneTests: XCTestCase {
         )
 
         XCTAssertEqual(decoded, original)
-        XCTAssertEqual(decoded.renderedScene?.frameCount, 52)
+        XCTAssertEqual(
+            decoded.renderedScene?.frameCount,
+            CaptureProgressState.targetCount
+        )
         XCTAssertEqual(decoded.renderedScene?.viewpoints.first?.panoramaPath, path)
     }
 
@@ -77,17 +81,17 @@ final class SpatialSceneTests: XCTestCase {
         XCTAssertEqual(decoded.forwardHeadingDegrees, 0)
     }
 
-    func testSphericalCaptureGridContainsFiveBandsAnd52Targets() {
-        XCTAssertEqual(CaptureDirection.all.count, 52)
-        XCTAssertEqual(CaptureDirection.bands.map(\.count), [8, 12, 12, 12, 8])
+    func testSphericalCaptureGridUsesOneImageAtEachPole() {
+        XCTAssertEqual(CaptureDirection.all.count, 38)
+        XCTAssertEqual(CaptureDirection.bands.map(\.count), [1, 12, 12, 12, 1])
         XCTAssertEqual(
             CaptureDirection.bands.map { Int($0[0].pitchDegrees.rounded()) },
-            [-75, -38, 0, 38, 75]
+            [-65, -38, 0, 38, 65]
         )
-        XCTAssertEqual(Set(CaptureDirection.all.map(\.id)).count, 52)
-        XCTAssertEqual(CaptureDirection.captureSequence.count, 52)
-        XCTAssertEqual(Set(CaptureDirection.captureSequence.map(\.id)).count, 52)
-        XCTAssertEqual(CaptureDirection.captureSequence.first?.id, 20)
+        XCTAssertEqual(Set(CaptureDirection.all.map(\.id)).count, 38)
+        XCTAssertEqual(CaptureDirection.captureSequence.count, 38)
+        XCTAssertEqual(Set(CaptureDirection.captureSequence.map(\.id)).count, 38)
+        XCTAssertEqual(CaptureDirection.captureSequence.first?.pitchDegrees, 0)
     }
 
     func testCaptureTargetOnlyAdvancesAfterCurrentTargetIsCaptured() {
@@ -153,23 +157,6 @@ final class SpatialSceneTests: XCTestCase {
         XCTAssertEqual(captured.state.capturedDirectionIDs, [direction.id])
     }
 
-    func testCaptureRequiresPortraitPhoneOrientation() {
-        var tracker = CaptureProgressTracker(recordingType: .stationary)
-        let direction = CaptureDirection.captureSequence[0]
-
-        let rejected = tracker.update(
-            position: .zero,
-            yawRadians: direction.yawRadians,
-            pitchRadians: direction.pitchRadians,
-            trackingQuality: .normal,
-            meshAnchorCount: 0,
-            isPortraitCaptureOrientation: false
-        )
-
-        XCTAssertNil(rejected.capturedDirection)
-        XCTAssertTrue(rejected.state.guidance.contains("竖直握持"))
-    }
-
     func testFirstCameraHeadingBecomesTheLocalPanoramaFront() {
         let heading: Float = 1.1
         var tracker = CaptureProgressTracker(recordingType: .stationary)
@@ -215,7 +202,23 @@ final class SpatialSceneTests: XCTestCase {
         XCTAssertTrue(update.state.guidance.contains("手机移回原点"))
     }
 
-    func testStationaryCaptureRejectsSmallHandheldParallaxDrift() {
+    func testStationaryCaptureAllowsNaturalHandheldPositionDrift() {
+        var tracker = CaptureProgressTracker(recordingType: .stationary)
+        _ = capture(CaptureDirection.captureSequence[0], with: &tracker, at: .zero)
+        let update = capture(
+            CaptureDirection.captureSequence[1],
+            with: &tracker,
+            at: Vector3(x: 0.20, y: 0.08, z: 0.05)
+        )
+
+        XCTAssertEqual(
+            update.capturedDirection?.id,
+            CaptureDirection.captureSequence[1].id
+        )
+        XCTAssertEqual(update.state.capturedDirectionIDs.count, 2)
+    }
+
+    func testStationaryCaptureRejectsPositionBeyondRelaxedBoundary() {
         var tracker = CaptureProgressTracker(recordingType: .stationary)
         _ = capture(CaptureDirection.captureSequence[0], with: &tracker, at: .zero)
         let update = capture(
@@ -231,6 +234,26 @@ final class SpatialSceneTests: XCTestCase {
         XCTAssertNil(update.capturedDirection)
         XCTAssertEqual(update.state.capturedDirectionIDs.count, 1)
         XCTAssertTrue(update.state.guidance.contains("手机移回原点"))
+    }
+
+    func testTopCaptureAllowsNaturalArmMovementAndStraightUpAim() {
+        var tracker = CaptureProgressTracker(recordingType: .stationary)
+        for direction in CaptureDirection.captureSequence.prefix(24) {
+            _ = capture(direction, with: &tracker, at: .zero)
+        }
+        let topDirection = CaptureDirection.captureSequence[24]
+
+        let update = tracker.update(
+            position: Vector3(x: 0.75, y: 0.45, z: 0),
+            yawRadians: topDirection.yawRadians + .pi,
+            pitchRadians: .pi / 2,
+            trackingQuality: .normal,
+            meshAnchorCount: 0
+        )
+
+        XCTAssertTrue(topDirection.isPolar)
+        XCTAssertGreaterThan(update.state.distanceFromActivePoint, 0.80)
+        XCTAssertEqual(update.capturedDirection?.id, topDirection.id)
     }
 
     func testMotionStabilityRequiresSustainedStillness() {
@@ -262,6 +285,35 @@ final class SpatialSceneTests: XCTestCase {
         )
     }
 
+    func testMotionStabilityAllowsMinorHandheldMotion() {
+        var stability = CaptureMotionStabilityTracker()
+        var result = stability.update(
+            timestamp: 0,
+            position: .zero,
+            forward: Vector3(x: 0, y: 0, z: 1)
+        )
+
+        for index in 1...15 {
+            let timestamp = Double(index) * 0.02
+            let angle = Float(timestamp) * 8 * .pi / 180
+            result = stability.update(
+                timestamp: timestamp,
+                position: Vector3(x: Float(timestamp) * 0.08, y: 0, z: 0),
+                forward: Vector3(x: sin(angle), y: 0, z: cos(angle))
+            )
+        }
+
+        XCTAssertTrue(result.isReady)
+        XCTAssertLessThanOrEqual(
+            result.linearSpeed,
+            CaptureMotionStabilityTracker.maximumLinearSpeed
+        )
+        XCTAssertLessThanOrEqual(
+            result.angularSpeed,
+            CaptureMotionStabilityTracker.maximumAngularSpeed
+        )
+    }
+
     func testFixedPointTourRequiresMovementAndCompletesThreePanoramas() {
         var tracker = CaptureProgressTracker(recordingType: .fixedPointTour)
         scanSphere(with: &tracker, at: .zero)
@@ -289,7 +341,7 @@ final class SpatialSceneTests: XCTestCase {
         let root = makeTemporaryRoot()
         defer { try? FileManager.default.removeItem(at: root) }
         var frames = try makeSphericalFrames()
-        frames[51] = frames[0]
+        frames[frames.count - 1] = frames[0]
 
         do {
             _ = try await SceneRenderingService(rootURL: root, panoramaWidth: 512).render(
@@ -372,7 +424,7 @@ final class SpatialSceneTests: XCTestCase {
         ) { _, _ in }
 
         XCTAssertEqual(rendered.viewpoints.count, 1)
-        XCTAssertEqual(rendered.frameCount, 52)
+        XCTAssertEqual(rendered.frameCount, CaptureProgressState.targetCount)
         let panoramaPath = try XCTUnwrap(rendered.viewpoints.first?.panoramaPath)
         let panoramaURL = root
             .appendingPathComponent(sceneID.uuidString)

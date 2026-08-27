@@ -249,15 +249,11 @@ struct CaptureView: View {
 
     private var canBeginCapture: Bool {
         progress.trackingQuality == .normal
-            && progress.isPortraitCaptureOrientation
     }
 
     private var captureReadinessMessage: String {
         guard progress.trackingQuality == .normal else {
             return "缓慢移动手机，等待空间定位稳定"
-        }
-        guard progress.isPortraitCaptureOrientation else {
-            return "请先竖直握持手机"
         }
         return "定位已稳定，请保持当前方向作为全景正前方"
     }
@@ -442,7 +438,7 @@ private struct RecordingTypeSelectionView: View {
                         Label("记录提示", systemImage: "lightbulb.fill")
                             .font(.headline)
                             .foregroundStyle(AppTheme.highlight)
-                        Text("拍摄时请始终竖直握持手机，将橙色目标点移入画面中央。玻璃、镜面、纯色墙和快速晃动会降低记录质量。")
+                        Text("将橙色目标点移入画面中央。玻璃、镜面、纯色墙和快速晃动会降低记录质量。")
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
                     }
@@ -627,9 +623,7 @@ private struct CaptureTargetOverlay: View {
                 if isCaptureStarted {
                     Circle()
                         .stroke(
-                            progress.isPortraitCaptureOrientation
-                                ? .white.opacity(0.92)
-                                : Color.red.opacity(0.9),
+                            .white.opacity(0.92),
                             style: StrokeStyle(lineWidth: 3, dash: [5, 4])
                         )
                         .frame(width: 58, height: 58)
@@ -637,15 +631,6 @@ private struct CaptureTargetOverlay: View {
                         .position(center)
                 }
 
-                if isCaptureStarted && !progress.isPortraitCaptureOrientation {
-                    Label("请竖直握持手机", systemImage: "iphone.gen3")
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 14)
-                        .frame(height: 38)
-                        .background(.red.opacity(0.82), in: Capsule())
-                        .position(x: center.x, y: center.y + 58)
-                }
             }
         }
         .accessibilityElement(children: .ignore)

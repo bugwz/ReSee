@@ -91,7 +91,6 @@ struct ARCaptureView: UIViewRepresentable {
             stableDuration: 0,
             isReady: false
         )
-        private var isPortraitCaptureOrientation = false
         private var isCaptureEnabled = false
         private var viewportSize: CGSize = .zero
         private var lastProjectionTimestamp: TimeInterval = 0
@@ -157,10 +156,6 @@ struct ARCaptureView: UIViewRepresentable {
                 z: transform.columns.3.z
             )
             let forward = -transform.columns.2
-            isPortraitCaptureOrientation = Self.isPortraitCaptureOrientation(
-                transform: transform,
-                fallback: isPortraitCaptureOrientation
-            )
             latestStability = motionStabilityTracker.update(
                 timestamp: frame.timestamp,
                 position: position,
@@ -193,7 +188,6 @@ struct ARCaptureView: UIViewRepresentable {
                 trackingQuality: quality,
                 meshAnchorCount: 0,
                 isStableForCapture: latestStability.isReady,
-                isPortraitCaptureOrientation: isPortraitCaptureOrientation,
                 captureFrame: false
             )
 
@@ -205,17 +199,15 @@ struct ARCaptureView: UIViewRepresentable {
                 && quality == .normal
                 && update.state.motionPhase == .scanning
                 && update.state.distanceFromActivePoint
-                    <= CaptureProgressState.maximumCaptureDrift
+                    <= update.state.allowedCaptureDrift
                 && latestStability.isReady
-                && isPortraitCaptureOrientation
                 && pendingDirection.map {
-                    CaptureDirection.angularDistance(
+                    $0.isAligned(
                         fromYaw: (
                             yaw - update.state.activeViewpointHeadingRadians
                         ).normalizedAngle,
-                        pitch: pitch,
-                        to: $0
-                    ) <= 14 * .pi / 180
+                        pitch: pitch
+                    )
                 } == true
                 && !update.state.capturedDirectionIDs.contains(pendingDirectionID ?? -1)
                 && !isCapturingHighResolutionFrame
@@ -286,10 +278,6 @@ struct ARCaptureView: UIViewRepresentable {
                   let frame,
                   frame.camera.trackingState.captureQuality == .normal,
                   latestStability.isReady,
-                  Self.isPortraitCaptureOrientation(
-                    transform: frame.camera.transform,
-                    fallback: isPortraitCaptureOrientation
-                  ),
                   tracker.state.activeViewpointIndex == viewpointIndex,
                   tracker.state.currentDirectionID == expectedDirection.id else {
                 cancelPendingCapture()
@@ -305,15 +293,16 @@ struct ARCaptureView: UIViewRepresentable {
             let forward = -transform.columns.2
             let yaw = atan2(forward.x, forward.z)
             let pitch = asin(min(max(forward.y, -1), 1))
-            guard CaptureDirection.angularDistance(
+            guard expectedDirection.isAligned(
                 fromYaw: (
                     yaw - tracker.state.activeViewpointHeadingRadians
                 ).normalizedAngle,
-                pitch: pitch,
-                to: expectedDirection
-            ) <= 14 * .pi / 180,
+                pitch: pitch
+            ),
             position.distance(to: tracker.state.viewpointPositions[viewpointIndex])
-                <= CaptureProgressState.maximumCaptureDrift else {
+                <= (expectedDirection.isPolar
+                    ? CaptureProgressState.maximumPolarCaptureDrift
+                    : CaptureProgressState.maximumCaptureDrift) else {
                 cancelPendingCapture()
                 return
             }
@@ -352,7 +341,6 @@ struct ARCaptureView: UIViewRepresentable {
                 trackingQuality: .normal,
                 meshAnchorCount: tracker.state.meshAnchorCount,
                 isStableForCapture: true,
-                isPortraitCaptureOrientation: true,
                 captureFrame: true
             )
             let projectedPosition = projectedTargetPosition(
@@ -505,17 +493,6 @@ struct ARCaptureView: UIViewRepresentable {
             )
         }
 
-        private static func isPortraitCaptureOrientation(
-            transform: simd_float4x4,
-            fallback: Bool
-        ) -> Bool {
-            let verticalInImage = SIMD2<Float>(
-                transform.columns.0.y,
-                transform.columns.1.y
-            )
-            guard simd_length(verticalInImage) > 0.3 else { return fallback }
-            return abs(verticalInImage.x) > abs(verticalInImage.y)
-        }
     }
 }
 

@@ -59,10 +59,22 @@ struct CaptureDirection: Identifiable, Hashable {
 
     var yawDegrees: Float { yawRadians * 180 / .pi }
     var pitchDegrees: Float { pitchRadians * 180 / .pi }
+    var isPolar: Bool { abs(pitchRadians) >= 60 * .pi / 180 }
+
+    func isAligned(fromYaw yaw: Float, pitch: Float) -> Bool {
+        if isPolar {
+            let minimumPolarPitch = 63 * Float.pi / 180
+            return pitchRadians > 0
+                ? pitch >= minimumPolarPitch
+                : pitch <= -minimumPolarPitch
+        }
+        return Self.angularDistance(fromYaw: yaw, pitch: pitch, to: self)
+            <= 14 * .pi / 180
+    }
 
     static let all: [CaptureDirection] = {
         let bands: [(pitch: Float, count: Int)] = [
-            (-75, 8), (-38, 12), (0, 12), (38, 12), (75, 8)
+            (-65, 1), (-38, 12), (0, 12), (38, 12), (65, 1)
         ]
         var result: [CaptureDirection] = []
         for (bandIndex, band) in bands.enumerated() {
@@ -88,14 +100,11 @@ struct CaptureDirection: Identifiable, Hashable {
     /// A deterministic, row-by-row route that starts straight ahead and keeps
     /// each successive target close to the previous one within a latitude band.
     static let captureSequence: [CaptureDirection] = {
-        let orderedIDs = Array(20...31)
-            + Array((32...43).reversed())
-            + Array(44...51)
-            + Array((8...19).reversed())
-            + Array(0...7)
-        return orderedIDs.compactMap { id in
-            all.first { $0.id == id }
-        }
+        bands[2]
+            + bands[3].reversed()
+            + bands[4]
+            + bands[1].reversed()
+            + bands[0]
     }()
 
     static func nextUncaptured(in capturedDirectionIDs: Set<Int>) -> CaptureDirection? {
@@ -142,7 +151,11 @@ enum CaptureMotionPhase: String, Codable, Hashable {
 
 struct CaptureProgressState: Equatable {
     static let targetCount = CaptureDirection.all.count
-    static let maximumCaptureDrift: Float = 0.12
+    /// Allows for the natural arc of a handheld phone while the user turns in
+    /// place, while still preventing frames from a different viewpoint from
+    /// being mixed into the same panorama.
+    static let maximumCaptureDrift: Float = 0.30
+    static let maximumPolarCaptureDrift: Float = 1.00
 
     var recordingType: RecordingType
     var trackingQuality: TrackingQuality = .unavailable
@@ -160,7 +173,6 @@ struct CaptureProgressState: Equatable {
     var meshAnchorCount = 0
     var supportsLiDAR = false
     var isStableForCapture = false
-    var isPortraitCaptureOrientation = false
 
     var currentTargetDirection: CaptureDirection? {
         guard let currentDirectionID else { return nil }
@@ -171,6 +183,12 @@ struct CaptureProgressState: Equatable {
         currentTargetDirection.map {
             ($0.yawRadians + activeViewpointHeadingRadians).normalizedAngle
         }
+    }
+
+    var allowedCaptureDrift: Float {
+        currentTargetDirection?.isPolar == true
+            ? Self.maximumPolarCaptureDrift
+            : Self.maximumCaptureDrift
     }
 
     var overallCoverage: Double {
@@ -195,12 +213,8 @@ struct CaptureProgressState: Equatable {
         if trackingQuality == .limited {
             return "对准有纹理的物体，避免快速晃动"
         }
-        if !isPortraitCaptureOrientation {
-            return "请竖直握持手机，不要横向拍摄"
-        }
-
         switch motionPhase {
-        case .scanning where distanceFromActivePoint > Self.maximumCaptureDrift:
+        case .scanning where distanceFromActivePoint > allowedCaptureDrift:
             return "请把手机移回原点，以手机为轴转动"
         case .scanning where !isStableForCapture:
             return "对准后停稳手机，正在消除手持抖动"
@@ -253,7 +267,6 @@ struct CaptureProgressTracker {
         trackingQuality: TrackingQuality,
         meshAnchorCount: Int,
         isStableForCapture: Bool = true,
-        isPortraitCaptureOrientation: Bool = true,
         captureFrame: Bool = true
     ) -> Update {
         state.trackingQuality = trackingQuality
@@ -262,7 +275,6 @@ struct CaptureProgressTracker {
         state.currentPitchRadians = pitchRadians
         state.meshAnchorCount = meshAnchorCount
         state.isStableForCapture = isStableForCapture
-        state.isPortraitCaptureOrientation = isPortraitCaptureOrientation
 
         if activePointOrigin == nil, trackingQuality == .normal {
             activePointOrigin = position
@@ -299,14 +311,9 @@ struct CaptureProgressTracker {
         }
         state.currentDirectionID = target.id
 
-        guard state.distanceFromActivePoint <= CaptureProgressState.maximumCaptureDrift,
+        guard state.distanceFromActivePoint <= state.allowedCaptureDrift,
               state.isStableForCapture,
-              state.isPortraitCaptureOrientation,
-              CaptureDirection.angularDistance(
-                fromYaw: relativeYaw,
-                pitch: pitchRadians,
-                to: target
-              ) <= 14 * .pi / 180,
+              target.isAligned(fromYaw: relativeYaw, pitch: pitchRadians),
               captureFrame else {
             return Update(state: state, didComplete: false)
         }
@@ -355,9 +362,12 @@ struct CaptureMotionStabilityTracker {
         var isReady: Bool
     }
 
-    static let maximumLinearSpeed: Float = 0.06
-    static let maximumAngularSpeed: Float = 5 * .pi / 180
-    static let requiredStableDuration: TimeInterval = 0.28
+    // A small amount of residual motion is normal when a phone is held at arm's
+    // length. These limits still reject an active pan, but do not require the
+    // user to hold the device as steadily as a tripod.
+    static let maximumLinearSpeed: Float = 0.10
+    static let maximumAngularSpeed: Float = 10 * .pi / 180
+    static let requiredStableDuration: TimeInterval = 0.20
 
     private var previousTimestamp: TimeInterval?
     private var previousPosition: Vector3?
