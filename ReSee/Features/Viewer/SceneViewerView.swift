@@ -5,6 +5,7 @@ import SwiftUI
 import UIKit
 
 struct SceneViewerView: View {
+    @EnvironmentObject private var settings: AppSettings
     let scene: SpatialScene
 
     @State private var viewpointIndex = 0
@@ -49,7 +50,8 @@ struct SceneViewerView: View {
                     viewpointName: activeViewpoint.name,
                     imageURL: panoramaURL(for: activeViewpoint),
                     isHorizontallyInverted: $isHorizontallyInverted,
-                    isVerticallyInverted: $isVerticallyInverted
+                    isVerticallyInverted: $isVerticallyInverted,
+                    startsWithMotion: settings.isMotionViewingEnabled
                 )
             }
         }
@@ -250,9 +252,25 @@ private struct LandscapePanoramaView: View {
     @Binding var isHorizontallyInverted: Bool
     @Binding var isVerticallyInverted: Bool
 
-    @State private var interactionMode = PanoramaInteractionMode.touch
+    @State private var interactionMode: PanoramaInteractionMode
     @State private var resetToken = 0
     @State private var isMotionAvailable = true
+
+    init(
+        title: String,
+        viewpointName: String,
+        imageURL: URL,
+        isHorizontallyInverted: Binding<Bool>,
+        isVerticallyInverted: Binding<Bool>,
+        startsWithMotion: Bool
+    ) {
+        self.title = title
+        self.viewpointName = viewpointName
+        self.imageURL = imageURL
+        _isHorizontallyInverted = isHorizontallyInverted
+        _isVerticallyInverted = isVerticallyInverted
+        _interactionMode = State(initialValue: startsWithMotion ? .motion : .touch)
+    }
 
     var body: some View {
         ZStack {

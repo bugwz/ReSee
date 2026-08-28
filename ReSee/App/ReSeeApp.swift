@@ -32,6 +32,7 @@ enum AppOrientationController {
 struct ReSeeApp: App {
     @UIApplicationDelegateAdaptor(ReSeeAppDelegate.self) private var appDelegate
     @StateObject private var sceneRepository = SceneRepository()
+    @StateObject private var settings = AppSettings()
     @State private var isShowingLaunchScreen = true
     @State private var isLeavingLaunchScreen = false
 
@@ -40,6 +41,7 @@ struct ReSeeApp: App {
             ZStack {
                 RootView()
                     .environmentObject(sceneRepository)
+                    .environmentObject(settings)
                     .opacity(isShowingLaunchScreen && !isLeavingLaunchScreen ? 0 : 1)
                     .scaleEffect(isShowingLaunchScreen && !isLeavingLaunchScreen ? 1.01 : 1)
                     .allowsHitTesting(!isShowingLaunchScreen)
@@ -50,8 +52,14 @@ struct ReSeeApp: App {
                 }
             }
             .background(AppTheme.launchBackground.ignoresSafeArea())
-            .preferredColorScheme(.light)
+            .preferredColorScheme(settings.appearance.colorScheme)
+            .environment(\.locale, settings.language.locale ?? .autoupdatingCurrent)
             .task {
+                Task {
+                    await sceneRepository.configureICloudSync(
+                        enabled: settings.isICloudSyncEnabled
+                    )
+                }
                 guard isShowingLaunchScreen else { return }
                 try? await Task.sleep(for: .seconds(3.7))
                 withAnimation(.easeInOut(duration: 0.9)) {

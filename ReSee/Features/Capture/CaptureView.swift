@@ -3,6 +3,7 @@ import SwiftUI
 struct CaptureView: View {
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var repository: SceneRepository
+    @EnvironmentObject private var settings: AppSettings
 
     @State private var flow: CaptureFlow = .selection
     @State private var selectedType: RecordingType = .stationary
@@ -17,8 +18,6 @@ struct CaptureView: View {
     @State private var renderingError: String?
     @State private var captureError: String?
     @StateObject private var targetProjection = CaptureTargetProjection()
-
-    private let renderingService = SceneRenderingService()
 
     var body: some View {
         Group {
@@ -47,6 +46,12 @@ struct CaptureView: View {
         } message: {
             Text(renderingError ?? "未知错误")
         }
+        .onChange(of: flow) { _, newValue in
+            updateIdleTimer(for: newValue)
+        }
+        .onDisappear {
+            UIApplication.shared.isIdleTimerDisabled = false
+        }
     }
 
     private var recordingView: some View {
@@ -56,7 +61,12 @@ struct CaptureView: View {
                 progress: $progress,
                 targetProjection: targetProjection,
                 isCaptureEnabled: isCaptureStarted,
-                onFrameCaptured: { frames.append($0) },
+                onFrameCaptured: { payload in
+                    frames.append(payload)
+                    if settings.isCaptureHapticsEnabled {
+                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                    }
+                },
                 onCompleted: finishRecording,
                 onError: { captureError = $0 }
             )
@@ -338,13 +348,20 @@ struct CaptureView: View {
         let capturedFrames = frames
         let duration = Date.now.timeIntervalSince(startedAt)
         let finalProgress = progress
+        let panoramaFormat = settings.panoramaFormat
+        let panoramaQuality = settings.panoramaQuality
+        let renderingService = SceneRenderingService(
+            panoramaWidth: settings.panoramaResolution.rawValue
+        )
 
         Task {
             do {
                 let rendered = try await renderingService.render(
                     sceneID: sceneID,
                     recordingType: selectedType,
-                    frames: capturedFrames
+                    frames: capturedFrames,
+                    imageFormat: panoramaFormat,
+                    compressionQuality: panoramaQuality
                 ) { value, message in
                     renderingProgress = value
                     renderingMessage = message
@@ -388,6 +405,11 @@ struct CaptureView: View {
         renderingError = nil
         captureError = nil
         isCaptureStarted = false
+    }
+
+    private func updateIdleTimer(for flow: CaptureFlow) {
+        UIApplication.shared.isIdleTimerDisabled = settings.keepsScreenAwakeDuringCapture
+            && (flow == .recording || flow == .rendering)
     }
 }
 

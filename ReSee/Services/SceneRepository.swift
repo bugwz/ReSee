@@ -15,12 +15,21 @@ enum SceneRepositoryError: LocalizedError {
 final class SceneRepository: ObservableObject {
     @Published private(set) var scenes: [SpatialScene] = []
     @Published private(set) var lastError: String?
+    @Published private(set) var iCloudSyncState: ICloudSyncState = .disabled
+    @Published private(set) var lastICloudSyncAt: Date?
 
     private let fileManager: FileManager
     private let storeURL: URL
+    private let cloudSyncService: ICloudSceneSyncService
+    private var isICloudSyncEnabled = false
 
-    init(fileManager: FileManager = .default, storeURL: URL? = nil) {
+    init(
+        fileManager: FileManager = .default,
+        storeURL: URL? = nil,
+        cloudSyncService: ICloudSceneSyncService? = nil
+    ) {
         self.fileManager = fileManager
+        self.cloudSyncService = cloudSyncService ?? ICloudSceneSyncService(fileManager: fileManager)
 
         if let storeURL {
             self.storeURL = storeURL
@@ -48,6 +57,7 @@ final class SceneRepository: ObservableObject {
         var updatedScenes = scenes.filter { $0.id != scene.id }
         updatedScenes.insert(scene, at: 0)
         try save(updatedScenes)
+        scheduleCloudUpload()
     }
 
     func delete(at offsets: IndexSet) {
@@ -73,6 +83,54 @@ final class SceneRepository: ObservableObject {
             } catch {
                 lastError = "场景已从列表删除，但本地文件清理失败：\(error.localizedDescription)"
             }
+        }
+
+        guard isICloudSyncEnabled else { return }
+        let sceneIDs = deletedScenes.map(\.id)
+        let currentScenes = scenes
+        let rootURL = storeURL.deletingLastPathComponent()
+        Task {
+            do {
+                iCloudSyncState = .syncing
+                try await cloudSyncService.remove(
+                    sceneIDs: sceneIDs,
+                    localRootURL: rootURL,
+                    scenes: currentScenes
+                )
+                markCloudSyncCompleted()
+            } catch {
+                markCloudSyncFailed(error)
+            }
+        }
+    }
+
+    func configureICloudSync(enabled: Bool) async {
+        isICloudSyncEnabled = enabled
+        guard enabled else {
+            iCloudSyncState = .disabled
+            return
+        }
+        await synchronizeWithICloud()
+    }
+
+    func synchronizeWithICloud() async {
+        guard isICloudSyncEnabled else {
+            iCloudSyncState = .disabled
+            return
+        }
+        iCloudSyncState = .syncing
+        do {
+            let mergedScenes = try await cloudSyncService.synchronize(
+                localRootURL: storeURL.deletingLastPathComponent()
+            )
+            scenes = mergedScenes
+            markCloudSyncCompleted()
+        } catch ICloudSceneSyncError.containerUnavailable {
+            iCloudSyncState = .unavailable(
+                ICloudSceneSyncError.containerUnavailable.localizedDescription
+            )
+        } catch {
+            markCloudSyncFailed(error)
         }
     }
 
@@ -107,6 +165,33 @@ final class SceneRepository: ObservableObject {
             lastError = repositoryError.localizedDescription
             throw repositoryError
         }
+    }
+
+    private func scheduleCloudUpload() {
+        guard isICloudSyncEnabled else { return }
+        let currentScenes = scenes
+        let rootURL = storeURL.deletingLastPathComponent()
+        Task {
+            do {
+                iCloudSyncState = .syncing
+                try await cloudSyncService.uploadSnapshot(
+                    localRootURL: rootURL,
+                    scenes: currentScenes
+                )
+                markCloudSyncCompleted()
+            } catch {
+                markCloudSyncFailed(error)
+            }
+        }
+    }
+
+    private func markCloudSyncCompleted() {
+        lastICloudSyncAt = .now
+        iCloudSyncState = .idle
+    }
+
+    private func markCloudSyncFailed(_ error: Error) {
+        iCloudSyncState = .failed(error.localizedDescription)
     }
 }
 

@@ -64,6 +64,8 @@ actor SceneRenderingService {
         sceneID: UUID,
         recordingType: RecordingType,
         frames: [CapturedFramePayload],
+        imageFormat: PanoramaImageFormat = .heic,
+        compressionQuality: Double = 0.98,
         progress: ProgressHandler
     ) async throws -> RenderedScene {
         let framesPerPoint = CaptureProgressState.targetCount
@@ -113,7 +115,8 @@ actor SceneRenderingService {
                 isDirectory: true
             )
             try fileManager.createDirectory(at: pointURL, withIntermediateDirectories: true)
-            let panoramaURL = pointURL.appendingPathComponent("panorama.heic")
+            let panoramaFilename = "panorama.\(imageFormat.fileExtension)"
+            let panoramaURL = pointURL.appendingPathComponent(panoramaFilename)
 
             await progress(
                 0.08 + Double(viewpointIndex * framesPerPoint) / Double(expectedCount) * 0.82,
@@ -121,7 +124,9 @@ actor SceneRenderingService {
             )
             try composePanorama(
                 frames: pointFrames,
-                outputURL: panoramaURL
+                outputURL: panoramaURL,
+                imageFormat: imageFormat,
+                compressionQuality: compressionQuality
             )
             await progress(
                 0.08 + Double((viewpointIndex + 1) * framesPerPoint) / Double(expectedCount) * 0.82,
@@ -134,7 +139,7 @@ actor SceneRenderingService {
                     index: viewpointIndex,
                     name: "点位 \(viewpointIndex + 1)",
                     position: Self.robustViewpointCenter(in: pointFrames),
-                    panoramaPath: "rendered/\(pointURL.lastPathComponent)/panorama.heic",
+                    panoramaPath: "rendered/\(pointURL.lastPathComponent)/\(panoramaFilename)",
                     sourceFrameCount: pointFrames.count,
                     forwardHeadingDegrees: Self.forwardHeadingRadians(in: pointFrames)
                         * 180 / .pi
@@ -170,7 +175,9 @@ actor SceneRenderingService {
 
     private func composePanorama(
         frames: [CapturedFramePayload],
-        outputURL: URL
+        outputURL: URL,
+        imageFormat: PanoramaImageFormat,
+        compressionQuality: Double
     ) throws {
         guard let device = MTLCreateSystemDefaultDevice(),
               let commandQueue = device.makeCommandQueue() else {
@@ -334,14 +341,28 @@ actor SceneRenderingService {
             ]
         )
         let context = CIContext(mtlDevice: device)
+        let quality = min(max(compressionQuality, 0.75), 1)
+        let options = [
+            kCGImageDestinationLossyCompressionQuality as CIImageRepresentationOption: quality
+        ]
         do {
-            try context.writeHEIFRepresentation(
-                of: sharpenedImage,
-                to: outputURL,
-                format: .RGBA8,
-                colorSpace: colorSpace,
-                options: [kCGImageDestinationLossyCompressionQuality as CIImageRepresentationOption: 0.98]
-            )
+            switch imageFormat {
+            case .heic:
+                try context.writeHEIFRepresentation(
+                    of: sharpenedImage,
+                    to: outputURL,
+                    format: .RGBA8,
+                    colorSpace: colorSpace,
+                    options: options
+                )
+            case .jpeg:
+                try context.writeJPEGRepresentation(
+                    of: sharpenedImage,
+                    to: outputURL,
+                    colorSpace: colorSpace,
+                    options: options
+                )
+            }
         } catch {
             throw SceneRenderingError.panoramaCreationFailed
         }

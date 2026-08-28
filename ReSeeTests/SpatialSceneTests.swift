@@ -5,6 +5,74 @@ import XCTest
 @testable import ReSee
 
 final class SpatialSceneTests: XCTestCase {
+    @MainActor
+    func testAppSettingsPersistPanoramaAndExperienceChoices() throws {
+        let suiteName = "ReSeeTests.Settings.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        let settings = AppSettings(defaults: defaults)
+        settings.isICloudSyncEnabled = true
+        settings.panoramaFormat = .jpeg
+        settings.panoramaResolution = .high
+        settings.panoramaQuality = 0.87
+        settings.appearance = .dark
+        settings.isMotionViewingEnabled = false
+
+        let restored = AppSettings(defaults: defaults)
+        XCTAssertTrue(restored.isICloudSyncEnabled)
+        XCTAssertEqual(restored.panoramaFormat, .jpeg)
+        XCTAssertEqual(restored.panoramaResolution, .high)
+        XCTAssertEqual(restored.panoramaQuality, 0.87, accuracy: 0.001)
+        XCTAssertEqual(restored.appearance, .dark)
+        XCTAssertFalse(restored.isMotionViewingEnabled)
+    }
+
+    func testICloudSyncCopiesPanoramasAndUsesNewestSceneMetadata() async throws {
+        let root = makeTemporaryRoot()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let localRoot = root.appendingPathComponent("local/Scenes", isDirectory: true)
+        let cloudContainer = root.appendingPathComponent("cloud", isDirectory: true)
+        let sceneID = UUID()
+        let panoramaPath = "rendered/viewpoint-00/panorama.heic"
+        let panoramaURL = localRoot
+            .appendingPathComponent(sceneID.uuidString)
+            .appendingPathComponent(panoramaPath)
+        try FileManager.default.createDirectory(
+            at: panoramaURL.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        try Data("local panorama".utf8).write(to: panoramaURL)
+
+        let localScene = makeStoredScene(
+            id: sceneID,
+            name: "本地名称",
+            updatedAt: Date(timeIntervalSince1970: 100),
+            panoramaPath: panoramaPath
+        )
+        try writeSceneIndex([localScene], rootURL: localRoot)
+
+        let service = ICloudSceneSyncService(cloudRootURL: cloudContainer)
+        let firstSync = try await service.synchronize(localRootURL: localRoot)
+        XCTAssertEqual(firstSync, [localScene])
+        let cloudRoot = cloudContainer
+            .appendingPathComponent("Documents/回见/Scenes", isDirectory: true)
+        XCTAssertTrue(FileManager.default.fileExists(
+            atPath: cloudRoot.appendingPathComponent(sceneID.uuidString)
+                .appendingPathComponent(panoramaPath).path
+        ))
+
+        let cloudScene = makeStoredScene(
+            id: sceneID,
+            name: "云端较新名称",
+            updatedAt: Date(timeIntervalSince1970: 200),
+            panoramaPath: panoramaPath
+        )
+        try writeSceneIndex([cloudScene], rootURL: cloudRoot)
+        let merged = try await service.synchronize(localRootURL: localRoot)
+        XCTAssertEqual(merged.first?.name, "云端较新名称")
+    }
+
     func testSceneRoundTripsThroughJSON() throws {
         let path = "rendered/viewpoint-00/panorama.jpg"
         let rendered = RenderedScene(
@@ -420,12 +488,15 @@ final class SpatialSceneTests: XCTestCase {
         ).render(
             sceneID: sceneID,
             recordingType: .stationary,
-            frames: try makeSphericalFrames()
+            frames: try makeSphericalFrames(),
+            imageFormat: .jpeg,
+            compressionQuality: 0.9
         ) { _, _ in }
 
         XCTAssertEqual(rendered.viewpoints.count, 1)
         XCTAssertEqual(rendered.frameCount, CaptureProgressState.targetCount)
         let panoramaPath = try XCTUnwrap(rendered.viewpoints.first?.panoramaPath)
+        XCTAssertTrue(panoramaPath.hasSuffix("panorama.jpg"))
         let panoramaURL = root
             .appendingPathComponent(sceneID.uuidString)
             .appendingPathComponent(panoramaPath)
@@ -583,6 +654,52 @@ final class SpatialSceneTests: XCTestCase {
     private func makeTemporaryRoot() -> URL {
         FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString, isDirectory: true)
+    }
+
+    private func makeStoredScene(
+        id: UUID,
+        name: String,
+        updatedAt: Date,
+        panoramaPath: String
+    ) -> SpatialScene {
+        SpatialScene(
+            id: id,
+            name: name,
+            createdAt: Date(timeIntervalSince1970: 50),
+            updatedAt: updatedAt,
+            capture: CaptureSummary(
+                duration: 10,
+                meshAnchorCount: 0,
+                supportsLiDAR: false,
+                trackingQuality: .normal,
+                capturedFrameCount: 38,
+                viewpointCount: 1,
+                coverage: 1
+            ),
+            renderedScene: RenderedScene(
+                generationState: .ready,
+                generatedAt: updatedAt,
+                viewpoints: [RenderedViewpoint(
+                    id: UUID(),
+                    index: 0,
+                    name: "点位 1",
+                    position: .zero,
+                    panoramaPath: panoramaPath,
+                    sourceFrameCount: 38
+                )],
+                thumbnailPath: panoramaPath
+            )
+        )
+    }
+
+    private func writeSceneIndex(_ scenes: [SpatialScene], rootURL: URL) throws {
+        try FileManager.default.createDirectory(at: rootURL, withIntermediateDirectories: true)
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        try encoder.encode(scenes).write(
+            to: rootURL.appendingPathComponent("scenes.json"),
+            options: .atomic
+        )
     }
 
     private func makeSphericalFrames(
