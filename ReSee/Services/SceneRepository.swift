@@ -22,6 +22,7 @@ final class SceneRepository: ObservableObject {
     private let storeURL: URL
     private let cloudSyncService: ICloudSceneSyncService
     private var isICloudSyncEnabled = false
+    private var includesICloudRenderedFiles = true
 
     init(
         fileManager: FileManager = .default,
@@ -95,7 +96,8 @@ final class SceneRepository: ObservableObject {
                 try await cloudSyncService.remove(
                     sceneIDs: sceneIDs,
                     localRootURL: rootURL,
-                    scenes: currentScenes
+                    scenes: currentScenes,
+                    includeRenderedFiles: includesICloudRenderedFiles
                 )
                 markCloudSyncCompleted()
             } catch {
@@ -104,8 +106,9 @@ final class SceneRepository: ObservableObject {
         }
     }
 
-    func configureICloudSync(enabled: Bool) async {
+    func configureICloudSync(enabled: Bool, includeRenderedFiles: Bool = true) async {
         isICloudSyncEnabled = enabled
+        includesICloudRenderedFiles = includeRenderedFiles
         guard enabled else {
             iCloudSyncState = .disabled
             return
@@ -121,7 +124,8 @@ final class SceneRepository: ObservableObject {
         iCloudSyncState = .syncing
         do {
             let mergedScenes = try await cloudSyncService.synchronize(
-                localRootURL: storeURL.deletingLastPathComponent()
+                localRootURL: storeURL.deletingLastPathComponent(),
+                includeRenderedFiles: includesICloudRenderedFiles
             )
             scenes = mergedScenes
             markCloudSyncCompleted()
@@ -176,7 +180,8 @@ final class SceneRepository: ObservableObject {
                 iCloudSyncState = .syncing
                 try await cloudSyncService.uploadSnapshot(
                     localRootURL: rootURL,
-                    scenes: currentScenes
+                    scenes: currentScenes,
+                    includeRenderedFiles: includesICloudRenderedFiles
                 )
                 markCloudSyncCompleted()
             } catch {

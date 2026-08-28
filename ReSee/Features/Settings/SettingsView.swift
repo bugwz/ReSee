@@ -2,6 +2,7 @@ import SwiftUI
 
 struct SettingsView: View {
     @EnvironmentObject private var repository: SceneRepository
+    @EnvironmentObject private var externalRepository: ExternalAssetRepository
     @EnvironmentObject private var settings: AppSettings
 
     var body: some View {
@@ -23,10 +24,24 @@ struct SettingsView: View {
                 Label("iCloud 数据同步", systemImage: "icloud")
             }
             .onChange(of: settings.isICloudSyncEnabled) { _, enabled in
-                Task { await repository.configureICloudSync(enabled: enabled) }
+                Task { await applySyncSettings(enabled: enabled) }
             }
 
             if settings.isICloudSyncEnabled {
+                Toggle("生成的全景文件", isOn: $settings.syncsRenderedPanoramas)
+                    .onChange(of: settings.syncsRenderedPanoramas) { _, _ in
+                        Task { await applySyncSettings() }
+                    }
+                Toggle("外部资源信息", isOn: $settings.syncsExternalMetadata)
+                    .onChange(of: settings.syncsExternalMetadata) { _, _ in
+                        Task { await applySyncSettings() }
+                    }
+                Toggle("外部资源数据文件", isOn: $settings.syncsExternalFiles)
+                    .disabled(!settings.syncsExternalMetadata)
+                    .onChange(of: settings.syncsExternalFiles) { _, _ in
+                        Task { await applySyncSettings() }
+                    }
+
                 LabeledContent("同步状态") {
                     HStack(spacing: 7) {
                         if repository.iCloudSyncState == .syncing {
@@ -48,7 +63,10 @@ struct SettingsView: View {
                 }
 
                 Button {
-                    Task { await repository.synchronizeWithICloud() }
+                    Task {
+                        await repository.synchronizeWithICloud()
+                        await externalRepository.synchronizeWithICloud()
+                    }
                 } label: {
                     Label("立即同步", systemImage: "arrow.triangle.2.circlepath")
                 }
@@ -60,11 +78,17 @@ struct SettingsView: View {
                             .foregroundStyle(.secondary)
                     }
                 }
+
+                NavigationLink {
+                    ICloudDataFileInfoView()
+                } label: {
+                    Label("同步数据与文件信息", systemImage: "doc.text.magnifyingglass")
+                }
             }
         } header: {
             Text("数据与 iCloud")
         } footer: {
-            Text("开启后，场景索引和已生成的全景文件会同步到 iCloud Drive/回见/Scenes。当前不上传原始相机帧、深度或网格。")
+            Text("场景索引始终同步；可分别选择生成全景、外部资源清单和应用内外部文件。原始相机帧、深度与网格仍不会上传。")
         }
     }
 
@@ -135,6 +159,13 @@ struct SettingsView: View {
                 Label("本地场景", systemImage: "internaldrive")
             }
 
+            LabeledContent {
+                Text("\(externalRepository.assets.count) 个")
+                    .foregroundStyle(.secondary)
+            } label: {
+                Label("外部资源", systemImage: "externaldrive")
+            }
+
             NavigationLink {
                 DataAndPrivacyView()
             } label: {
@@ -169,6 +200,64 @@ struct SettingsView: View {
         let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "—"
         let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "—"
         return "\(version) (\(build))"
+    }
+
+    private func applySyncSettings(enabled: Bool? = nil) async {
+        let isEnabled = enabled ?? settings.isICloudSyncEnabled
+        await repository.configureICloudSync(
+            enabled: isEnabled,
+            includeRenderedFiles: settings.syncsRenderedPanoramas
+        )
+        await externalRepository.configureICloudSync(
+            enabled: isEnabled,
+            includeMetadata: settings.syncsExternalMetadata,
+            includeFiles: settings.syncsExternalFiles
+        )
+    }
+}
+
+private struct ICloudDataFileInfoView: View {
+    @EnvironmentObject private var repository: SceneRepository
+    @EnvironmentObject private var externalRepository: ExternalAssetRepository
+    @EnvironmentObject private var settings: AppSettings
+
+    var body: some View {
+        List {
+            Section("录制场景") {
+                LabeledContent("场景索引", value: "\(repository.scenes.count) 条 · 始终同步")
+                LabeledContent("生成全景") {
+                    Text(settings.syncsRenderedPanoramas ? "同步" : "不同步")
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            Section {
+                LabeledContent("资源清单") {
+                    Text(settings.syncsExternalMetadata ? "\(externalRepository.assets.count) 条 · 同步" : "不同步")
+                        .foregroundStyle(.secondary)
+                }
+                ForEach(externalRepository.assets) { asset in
+                    VStack(alignment: .leading, spacing: 5) {
+                        Text(asset.name).font(.subheadline.weight(.medium))
+                        Text("\(asset.kind.title) · \(asset.totalByteCount.formattedFileSize) · \(syncDescription(asset))")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            } header: {
+                Text("外部资源")
+            } footer: {
+                Text("“引用原文件”只同步资源信息和书签，不上传原位置的文件；换设备后通常需要重新授权。只有下载或复制到回见的文件可作为外部资源数据同步。")
+            }
+        }
+        .navigationTitle("同步数据与文件")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+
+    private func syncDescription(_ asset: ExternalAsset) -> String {
+        guard settings.syncsExternalMetadata else { return "不上传" }
+        guard asset.storage.isManaged else { return "仅信息" }
+        return settings.syncsExternalFiles ? "信息与文件" : "仅信息"
     }
 }
 

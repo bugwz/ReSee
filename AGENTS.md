@@ -12,9 +12,9 @@
 - ARKit、RealityKit
 - XCTest
 - Xcode 16 或更新版本
-- iOS 17.0 或更新版本
+- iOS 18.0 或更新版本
 - AR 采集必须在 iOS 真机验证；推荐带 LiDAR 的 iPhone Pro 或 iPad Pro
-- 不引入第三方依赖，除非需求确实需要并已评估许可证、包体积和维护成本
+- 不引入第三方依赖，除非需求确实需要并已评估许可证、包体积和维护成本；当前外部 3DGS 浏览固定使用 MIT 许可的 MetalSplatter 1.0.1
 
 完整产品路线、数据设计与开源组件选择见 `README.md`。
 

@@ -5,6 +5,90 @@ import XCTest
 @testable import ReSee
 
 final class SpatialSceneTests: XCTestCase {
+    func testSplatJoysticksConvertScreenDragIntoViewCoordinates() {
+        XCTAssertEqual(
+            SplatJoystickMapping.movement(SIMD2<Float>(0.75, -0.5)),
+            SIMD2<Float>(-0.75, 0.5)
+        )
+        XCTAssertEqual(
+            SplatJoystickMapping.look(SIMD2<Float>(-0.4, 0.8)),
+            SIMD2<Float>(0.4, -0.8)
+        )
+    }
+
+    func testExternalAssetFormatClassifiesSupportedFiles() throws {
+        XCTAssertEqual(
+            try ExternalAssetFormat.kind(for: [URL(fileURLWithPath: "/tmp/room.heic")]),
+            .stationaryPanorama
+        )
+        XCTAssertEqual(
+            try ExternalAssetFormat.kind(for: [
+                URL(fileURLWithPath: "/tmp/one.jpg"),
+                URL(fileURLWithPath: "/tmp/two.png")
+            ]),
+            .multiPointPanorama
+        )
+        XCTAssertEqual(
+            try ExternalAssetFormat.kind(for: [URL(fileURLWithPath: "/tmp/scene.spz")]),
+            .gaussianSplat
+        )
+        XCTAssertThrowsError(try ExternalAssetFormat.kind(for: [
+            URL(fileURLWithPath: "/tmp/room.jpg"),
+            URL(fileURLWithPath: "/tmp/scene.splat")
+        ]))
+    }
+
+    func testExternalAssetRoundTripsThroughJSON() throws {
+        let original = ExternalAsset(
+            id: UUID(),
+            name: "展厅高斯",
+            kind: .gaussianSplat,
+            storage: .downloaded,
+            createdAt: .now,
+            updatedAt: .now,
+            sourceURL: "https://example.com/gallery.spz",
+            files: [ExternalAssetFile(
+                id: UUID(),
+                displayName: "gallery.spz",
+                relativePath: "files/01-gallery.spz",
+                bookmarkData: nil,
+                byteCount: 1_024,
+                contentTypeIdentifier: "public.data",
+                pixelWidth: nil,
+                pixelHeight: nil
+            )]
+        )
+
+        let decoded = try JSONDecoder().decode(
+            ExternalAsset.self,
+            from: JSONEncoder().encode(original)
+        )
+
+        XCTAssertEqual(decoded, original)
+        XCTAssertEqual(decoded.totalByteCount, 1_024)
+        XCTAssertEqual(decoded.formatSummary, "SPZ")
+    }
+
+    @MainActor
+    func testExternalAssetRepositoryCopiesManagedFile() async throws {
+        let root = makeTemporaryRoot()
+        defer { try? FileManager.default.removeItem(at: root) }
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        let source = root.appendingPathComponent("source.splat")
+        try Data(repeating: 0, count: 64).write(to: source)
+        let library = root.appendingPathComponent("ExternalAssets", isDirectory: true)
+        let repository = ExternalAssetRepository(rootURL: library)
+
+        await repository.importFiles(urls: [source], copyIntoLibrary: true)
+
+        let asset = try XCTUnwrap(repository.assets.first)
+        XCTAssertEqual(asset.kind, .gaussianSplat)
+        XCTAssertEqual(asset.storage, .copied)
+        XCTAssertEqual(asset.totalByteCount, 64)
+        let access = try repository.scopedAccess(to: asset)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: try XCTUnwrap(access.resources.first).url.path))
+    }
+
     @MainActor
     func testAppSettingsPersistPanoramaAndExperienceChoices() throws {
         let suiteName = "ReSeeTests.Settings.\(UUID().uuidString)"
@@ -13,6 +97,9 @@ final class SpatialSceneTests: XCTestCase {
 
         let settings = AppSettings(defaults: defaults)
         settings.isICloudSyncEnabled = true
+        settings.syncsRenderedPanoramas = false
+        settings.syncsExternalMetadata = true
+        settings.syncsExternalFiles = false
         settings.panoramaFormat = .jpeg
         settings.panoramaResolution = .high
         settings.panoramaQuality = 0.87
@@ -21,6 +108,9 @@ final class SpatialSceneTests: XCTestCase {
 
         let restored = AppSettings(defaults: defaults)
         XCTAssertTrue(restored.isICloudSyncEnabled)
+        XCTAssertFalse(restored.syncsRenderedPanoramas)
+        XCTAssertTrue(restored.syncsExternalMetadata)
+        XCTAssertFalse(restored.syncsExternalFiles)
         XCTAssertEqual(restored.panoramaFormat, .jpeg)
         XCTAssertEqual(restored.panoramaResolution, .high)
         XCTAssertEqual(restored.panoramaQuality, 0.87, accuracy: 0.001)

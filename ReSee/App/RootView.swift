@@ -17,6 +17,14 @@ struct RootView: View {
             }
 
             NavigationStack {
+                ExternalAssetLibraryView()
+            }
+            .tag(AppTab.externalAssets)
+            .tabItem {
+                Label("外部", systemImage: "square.and.arrow.down")
+            }
+
+            NavigationStack {
                 SettingsView()
             }
             .tag(AppTab.settings)
@@ -34,5 +42,6 @@ struct RootView: View {
 
 private enum AppTab {
     case library
+    case externalAssets
     case settings
 }

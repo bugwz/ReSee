@@ -401,12 +401,12 @@ private struct LandscapePanoramaView: View {
     }
 }
 
-private enum PanoramaInteractionMode: Equatable {
+enum PanoramaInteractionMode: Equatable {
     case touch
     case motion
 }
 
-private struct PanoramaSceneView: UIViewRepresentable {
+struct PanoramaSceneView: UIViewRepresentable {
     let imageURL: URL
     let interactionMode: PanoramaInteractionMode
     let resetToken: Int

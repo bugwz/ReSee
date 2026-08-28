@@ -45,7 +45,7 @@ actor ICloudSceneSyncService {
         injectedCloudRootURL = cloudRootURL
     }
 
-    func synchronize(localRootURL: URL) throws -> [SpatialScene] {
+    func synchronize(localRootURL: URL, includeRenderedFiles: Bool = true) throws -> [SpatialScene] {
         let cloudRootURL = try resolvedCloudRootURL()
         try fileManager.createDirectory(at: localRootURL, withIntermediateDirectories: true)
         try fileManager.createDirectory(at: cloudRootURL, withIntermediateDirectories: true)
@@ -66,11 +66,13 @@ actor ICloudSceneSyncService {
 
             let sourceRoot = shouldUseCloud ? cloudRootURL : localRootURL
             let destinationRoot = shouldUseCloud ? localRootURL : cloudRootURL
-            try copySceneDirectory(
-                sceneID: sceneID,
-                from: sourceRoot,
-                to: destinationRoot
-            )
+            if includeRenderedFiles {
+                try copySceneDirectory(
+                    sceneID: sceneID,
+                    from: sourceRoot,
+                    to: destinationRoot
+                )
+            }
             merged.append(selectedScene)
         }
 
@@ -80,16 +82,27 @@ actor ICloudSceneSyncService {
         return merged
     }
 
-    func uploadSnapshot(localRootURL: URL, scenes: [SpatialScene]) throws {
+    func uploadSnapshot(
+        localRootURL: URL,
+        scenes: [SpatialScene],
+        includeRenderedFiles: Bool = true
+    ) throws {
         let cloudRootURL = try resolvedCloudRootURL()
         try fileManager.createDirectory(at: cloudRootURL, withIntermediateDirectories: true)
-        for scene in scenes {
-            try copySceneDirectory(sceneID: scene.id, from: localRootURL, to: cloudRootURL)
+        if includeRenderedFiles {
+            for scene in scenes {
+                try copySceneDirectory(sceneID: scene.id, from: localRootURL, to: cloudRootURL)
+            }
         }
         try writeScenes(scenes, at: cloudRootURL.appendingPathComponent("scenes.json"))
     }
 
-    func remove(sceneIDs: [UUID], localRootURL: URL, scenes: [SpatialScene]) throws {
+    func remove(
+        sceneIDs: [UUID],
+        localRootURL: URL,
+        scenes: [SpatialScene],
+        includeRenderedFiles: Bool = true
+    ) throws {
         let cloudRootURL = try resolvedCloudRootURL()
         for sceneID in sceneIDs {
             let sceneURL = cloudRootURL.appendingPathComponent(sceneID.uuidString, isDirectory: true)
@@ -97,7 +110,11 @@ actor ICloudSceneSyncService {
                 try fileManager.removeItem(at: sceneURL)
             }
         }
-        try uploadSnapshot(localRootURL: localRootURL, scenes: scenes)
+        try uploadSnapshot(
+            localRootURL: localRootURL,
+            scenes: scenes,
+            includeRenderedFiles: includeRenderedFiles
+        )
     }
 
     private func resolvedCloudRootURL() throws -> URL {

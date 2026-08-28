@@ -32,6 +32,7 @@ enum AppOrientationController {
 struct ReSeeApp: App {
     @UIApplicationDelegateAdaptor(ReSeeAppDelegate.self) private var appDelegate
     @StateObject private var sceneRepository = SceneRepository()
+    @StateObject private var externalAssetRepository = ExternalAssetRepository()
     @StateObject private var settings = AppSettings()
     @State private var isShowingLaunchScreen = true
     @State private var isLeavingLaunchScreen = false
@@ -41,6 +42,7 @@ struct ReSeeApp: App {
             ZStack {
                 RootView()
                     .environmentObject(sceneRepository)
+                    .environmentObject(externalAssetRepository)
                     .environmentObject(settings)
                     .opacity(isShowingLaunchScreen && !isLeavingLaunchScreen ? 0 : 1)
                     .scaleEffect(isShowingLaunchScreen && !isLeavingLaunchScreen ? 1.01 : 1)
@@ -57,7 +59,13 @@ struct ReSeeApp: App {
             .task {
                 Task {
                     await sceneRepository.configureICloudSync(
-                        enabled: settings.isICloudSyncEnabled
+                        enabled: settings.isICloudSyncEnabled,
+                        includeRenderedFiles: settings.syncsRenderedPanoramas
+                    )
+                    await externalAssetRepository.configureICloudSync(
+                        enabled: settings.isICloudSyncEnabled,
+                        includeMetadata: settings.syncsExternalMetadata,
+                        includeFiles: settings.syncsExternalFiles
                     )
                 }
                 guard isShowingLaunchScreen else { return }

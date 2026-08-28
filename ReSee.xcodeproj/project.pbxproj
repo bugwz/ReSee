@@ -26,6 +26,14 @@
 		A00000000000000000000112 /* AppSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000215 /* AppSettings.swift */; };
 		A00000000000000000000113 /* ICloudSceneSyncService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000216 /* ICloudSceneSyncService.swift */; };
 		A00000000000000000000114 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000217 /* SettingsView.swift */; };
+		A00000000000000000000115 /* ExternalAsset.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000219 /* ExternalAsset.swift */; };
+		A00000000000000000000116 /* ExternalAssetRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0000000000000000000021A /* ExternalAssetRepository.swift */; };
+		A00000000000000000000117 /* ExternalAssetLibraryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0000000000000000000021B /* ExternalAssetLibraryView.swift */; };
+		A00000000000000000000118 /* ExternalAssetViewerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0000000000000000000021C /* ExternalAssetViewerView.swift */; };
+		A00000000000000000000119 /* GaussianSplatViewerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0000000000000000000021D /* GaussianSplatViewerView.swift */; };
+		A0000000000000000000011A /* ICloudExternalAssetSyncService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0000000000000000000021E /* ICloudExternalAssetSyncService.swift */; };
+		A0000000000000000000011B /* MetalSplatter in Frameworks */ = {isa = PBXBuildFile; productRef = A00000000000000000000A02 /* MetalSplatter */; };
+		A0000000000000000000011C /* SplatIO in Frameworks */ = {isa = PBXBuildFile; productRef = A00000000000000000000A03 /* SplatIO */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -62,6 +70,12 @@
 		A00000000000000000000216 /* ICloudSceneSyncService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ICloudSceneSyncService.swift; sourceTree = "<group>"; };
 		A00000000000000000000217 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		A00000000000000000000218 /* ReSee.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = ReSee.entitlements; sourceTree = "<group>"; };
+		A00000000000000000000219 /* ExternalAsset.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExternalAsset.swift; sourceTree = "<group>"; };
+		A0000000000000000000021A /* ExternalAssetRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExternalAssetRepository.swift; sourceTree = "<group>"; };
+		A0000000000000000000021B /* ExternalAssetLibraryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExternalAssetLibraryView.swift; sourceTree = "<group>"; };
+		A0000000000000000000021C /* ExternalAssetViewerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExternalAssetViewerView.swift; sourceTree = "<group>"; };
+		A0000000000000000000021D /* GaussianSplatViewerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GaussianSplatViewerView.swift; sourceTree = "<group>"; };
+		A0000000000000000000021E /* ICloudExternalAssetSyncService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ICloudExternalAssetSyncService.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -69,6 +83,8 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				A0000000000000000000011B /* MetalSplatter in Frameworks */,
+				A0000000000000000000011C /* SplatIO in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -124,6 +140,7 @@
 				A00000000000000000000212 /* RecordingType.swift */,
 				A00000000000000000000213 /* RenderedScene.swift */,
 				A00000000000000000000215 /* AppSettings.swift */,
+				A00000000000000000000219 /* ExternalAsset.swift */,
 			);
 			path = Models;
 			sourceTree = "<group>";
@@ -152,6 +169,7 @@
 			isa = PBXGroup;
 			children = (
 				A00000000000000000000207 /* SceneLibraryView.swift */,
+				A0000000000000000000021B /* ExternalAssetLibraryView.swift */,
 			);
 			path = Library;
 			sourceTree = "<group>";
@@ -160,6 +178,8 @@
 			isa = PBXGroup;
 			children = (
 				A0000000000000000000020A /* SceneViewerView.swift */,
+				A0000000000000000000021C /* ExternalAssetViewerView.swift */,
+				A0000000000000000000021D /* GaussianSplatViewerView.swift */,
 			);
 			path = Viewer;
 			sourceTree = "<group>";
@@ -170,6 +190,8 @@
 				A00000000000000000000206 /* SceneRepository.swift */,
 				A00000000000000000000214 /* SceneRenderingService.swift */,
 				A00000000000000000000216 /* ICloudSceneSyncService.swift */,
+				A0000000000000000000021A /* ExternalAssetRepository.swift */,
+				A0000000000000000000021E /* ICloudExternalAssetSyncService.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -232,6 +254,10 @@
 			dependencies = (
 			);
 			name = ReSee;
+			packageProductDependencies = (
+				A00000000000000000000A02 /* MetalSplatter */,
+				A00000000000000000000A03 /* SplatIO */,
+			);
 			productName = ReSee;
 			productReference = A00000000000000000000210 /* ReSee.app */;
 			productType = "com.apple.product-type.application";
@@ -288,6 +314,9 @@
 				en,
 			);
 			mainGroup = A00000000000000000000701;
+			packageReferences = (
+				A00000000000000000000A01 /* XCRemoteSwiftPackageReference "MetalSplatter" */,
+			);
 			productRefGroup = A0000000000000000000070C /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
@@ -337,6 +366,12 @@
 				A00000000000000000000112 /* AppSettings.swift in Sources */,
 				A00000000000000000000113 /* ICloudSceneSyncService.swift in Sources */,
 				A00000000000000000000114 /* SettingsView.swift in Sources */,
+				A00000000000000000000115 /* ExternalAsset.swift in Sources */,
+				A00000000000000000000116 /* ExternalAssetRepository.swift in Sources */,
+				A00000000000000000000117 /* ExternalAssetLibraryView.swift in Sources */,
+				A00000000000000000000118 /* ExternalAssetViewerView.swift in Sources */,
+				A00000000000000000000119 /* GaussianSplatViewerView.swift in Sources */,
+				A0000000000000000000011A /* ICloudExternalAssetSyncService.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -383,7 +418,7 @@
 					"DEBUG=1",
 					"$(inherited)",
 				);
-				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				ONLY_ACTIVE_ARCH = YES;
 				SDKROOT = iphoneos;
@@ -411,7 +446,7 @@
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				ENABLE_NS_ASSERTIONS = NO;
 				GCC_C_LANGUAGE_STANDARD = gnu17;
-				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				SDKROOT = iphoneos;
 				SWIFT_COMPILATION_MODE = wholemodule;
@@ -485,7 +520,7 @@
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
 				GENERATE_INFOPLIST_FILE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -505,7 +540,7 @@
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
 				GENERATE_INFOPLIST_FILE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -550,6 +585,30 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		A00000000000000000000A01 /* XCRemoteSwiftPackageReference "MetalSplatter" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/scier/MetalSplatter.git";
+			requirement = {
+				kind = exactVersion;
+				version = 1.0.1;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		A00000000000000000000A02 /* MetalSplatter */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = A00000000000000000000A01 /* XCRemoteSwiftPackageReference "MetalSplatter" */;
+			productName = MetalSplatter;
+		};
+		A00000000000000000000A03 /* SplatIO */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = A00000000000000000000A01 /* XCRemoteSwiftPackageReference "MetalSplatter" */;
+			productName = SplatIO;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = A00000000000000000000601 /* Project object */;
 }

@@ -82,6 +82,9 @@ enum PanoramaResolution: Int, CaseIterable, Identifiable {
 @MainActor
 final class AppSettings: ObservableObject {
     @Published var isICloudSyncEnabled: Bool { didSet { persist() } }
+    @Published var syncsRenderedPanoramas: Bool { didSet { persist() } }
+    @Published var syncsExternalMetadata: Bool { didSet { persist() } }
+    @Published var syncsExternalFiles: Bool { didSet { persist() } }
     @Published var language: AppLanguage { didSet { persist() } }
     @Published var appearance: AppAppearance { didSet { persist() } }
     @Published var panoramaFormat: PanoramaImageFormat { didSet { persist() } }
@@ -97,6 +100,9 @@ final class AppSettings: ObservableObject {
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
         isICloudSyncEnabled = defaults.bool(forKey: Keys.iCloudSync)
+        syncsRenderedPanoramas = defaults.object(forKey: Keys.syncRenderedPanoramas) as? Bool ?? true
+        syncsExternalMetadata = defaults.object(forKey: Keys.syncExternalMetadata) as? Bool ?? true
+        syncsExternalFiles = defaults.object(forKey: Keys.syncExternalFiles) as? Bool ?? true
         language = AppLanguage(rawValue: defaults.string(forKey: Keys.language) ?? "") ?? .system
         appearance = AppAppearance(rawValue: defaults.string(forKey: Keys.appearance) ?? "") ?? .system
         panoramaFormat = PanoramaImageFormat(
@@ -116,6 +122,9 @@ final class AppSettings: ObservableObject {
     private func persist() {
         guard !isLoading else { return }
         defaults.set(isICloudSyncEnabled, forKey: Keys.iCloudSync)
+        defaults.set(syncsRenderedPanoramas, forKey: Keys.syncRenderedPanoramas)
+        defaults.set(syncsExternalMetadata, forKey: Keys.syncExternalMetadata)
+        defaults.set(syncsExternalFiles, forKey: Keys.syncExternalFiles)
         defaults.set(language.rawValue, forKey: Keys.language)
         defaults.set(appearance.rawValue, forKey: Keys.appearance)
         defaults.set(panoramaFormat.rawValue, forKey: Keys.panoramaFormat)
@@ -128,6 +137,9 @@ final class AppSettings: ObservableObject {
 
     private enum Keys {
         static let iCloudSync = "settings.icloud-sync"
+        static let syncRenderedPanoramas = "settings.sync-rendered-panoramas"
+        static let syncExternalMetadata = "settings.sync-external-metadata"
+        static let syncExternalFiles = "settings.sync-external-files"
         static let language = "settings.language"
         static let appearance = "settings.appearance"
         static let panoramaFormat = "settings.panorama-format"
