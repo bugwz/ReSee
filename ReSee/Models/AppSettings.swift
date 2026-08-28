@@ -79,6 +79,68 @@ enum PanoramaResolution: Int, CaseIterable, Identifiable {
     var detail: String { "\(rawValue) × \(rawValue / 2)" }
 }
 
+enum SplatControlLayout: String, CaseIterable, Identifiable {
+    case movementOnLeft
+    case movementOnRight
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .movementOnLeft: "移动在左"
+        case .movementOnRight: "移动在右"
+        }
+    }
+}
+
+enum SplatMovementSpeed: String, CaseIterable, Identifiable {
+    case precise
+    case standard
+    case fast
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .precise: "精细"
+        case .standard: "标准"
+        case .fast: "快速"
+        }
+    }
+
+    var multiplier: Float {
+        switch self {
+        case .precise: 0.5
+        case .standard: 1
+        case .fast: 1.8
+        }
+    }
+}
+
+enum SplatJoystickSize: String, CaseIterable, Identifiable {
+    case medium
+    case large
+    case extraLarge
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .medium: "中"
+        case .large: "大"
+        case .extraLarge: "特大"
+        }
+    }
+
+    var diameter: CGFloat {
+        switch self {
+        case .medium: 116
+        case .large: 136
+        case .extraLarge: 156
+        }
+    }
+}
+
 @MainActor
 final class AppSettings: ObservableObject {
     @Published var isICloudSyncEnabled: Bool { didSet { persist() } }
@@ -93,6 +155,12 @@ final class AppSettings: ObservableObject {
     @Published var isCaptureHapticsEnabled: Bool { didSet { persist() } }
     @Published var keepsScreenAwakeDuringCapture: Bool { didSet { persist() } }
     @Published var isMotionViewingEnabled: Bool { didSet { persist() } }
+    @Published var splatControlLayout: SplatControlLayout { didSet { persist() } }
+    @Published var splatMovementSpeed: SplatMovementSpeed { didSet { persist() } }
+    @Published var splatJoystickSize: SplatJoystickSize { didSet { persist() } }
+    @Published var showsSplatControlsByDefault: Bool { didSet { persist() } }
+    @Published var showsSplatJoystickGuides: Bool { didSet { persist() } }
+    @Published var showsSplatSceneInfo: Bool { didSet { persist() } }
 
     private let defaults: UserDefaults
     private var isLoading = true
@@ -116,6 +184,22 @@ final class AppSettings: ObservableObject {
         isCaptureHapticsEnabled = defaults.object(forKey: Keys.captureHaptics) as? Bool ?? true
         keepsScreenAwakeDuringCapture = defaults.object(forKey: Keys.keepAwake) as? Bool ?? true
         isMotionViewingEnabled = defaults.object(forKey: Keys.motionViewing) as? Bool ?? true
+        splatControlLayout = SplatControlLayout(
+            rawValue: defaults.string(forKey: Keys.splatControlLayout) ?? ""
+        ) ?? .movementOnLeft
+        splatMovementSpeed = SplatMovementSpeed(
+            rawValue: defaults.string(forKey: Keys.splatMovementSpeed) ?? ""
+        ) ?? .standard
+        splatJoystickSize = SplatJoystickSize(
+            rawValue: defaults.string(forKey: Keys.splatJoystickSize) ?? ""
+        ) ?? .large
+        showsSplatControlsByDefault = defaults.object(
+            forKey: Keys.showsSplatControlsByDefault
+        ) as? Bool ?? true
+        showsSplatJoystickGuides = defaults.object(
+            forKey: Keys.showsSplatJoystickGuides
+        ) as? Bool ?? true
+        showsSplatSceneInfo = defaults.object(forKey: Keys.showsSplatSceneInfo) as? Bool ?? true
         isLoading = false
     }
 
@@ -133,6 +217,12 @@ final class AppSettings: ObservableObject {
         defaults.set(isCaptureHapticsEnabled, forKey: Keys.captureHaptics)
         defaults.set(keepsScreenAwakeDuringCapture, forKey: Keys.keepAwake)
         defaults.set(isMotionViewingEnabled, forKey: Keys.motionViewing)
+        defaults.set(splatControlLayout.rawValue, forKey: Keys.splatControlLayout)
+        defaults.set(splatMovementSpeed.rawValue, forKey: Keys.splatMovementSpeed)
+        defaults.set(splatJoystickSize.rawValue, forKey: Keys.splatJoystickSize)
+        defaults.set(showsSplatControlsByDefault, forKey: Keys.showsSplatControlsByDefault)
+        defaults.set(showsSplatJoystickGuides, forKey: Keys.showsSplatJoystickGuides)
+        defaults.set(showsSplatSceneInfo, forKey: Keys.showsSplatSceneInfo)
     }
 
     private enum Keys {
@@ -148,5 +238,11 @@ final class AppSettings: ObservableObject {
         static let captureHaptics = "settings.capture-haptics"
         static let keepAwake = "settings.keep-awake"
         static let motionViewing = "settings.motion-viewing"
+        static let splatControlLayout = "settings.splat-control-layout"
+        static let splatMovementSpeed = "settings.splat-movement-speed"
+        static let splatJoystickSize = "settings.splat-joystick-size"
+        static let showsSplatControlsByDefault = "settings.splat-shows-controls"
+        static let showsSplatJoystickGuides = "settings.splat-shows-guides"
+        static let showsSplatSceneInfo = "settings.splat-shows-scene-info"
     }
 }

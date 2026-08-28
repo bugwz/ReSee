@@ -119,10 +119,20 @@ struct SettingsView: View {
             Toggle(isOn: $settings.isMotionViewingEnabled) {
                 Label("横屏时默认跟随手机", systemImage: "gyroscope")
             }
+
+            NavigationLink {
+                SplatViewerSettingsView()
+            } label: {
+                SettingsSummaryRow(
+                    icon: "gamecontroller",
+                    title: "高斯查看控制器",
+                    detail: "\(settings.splatControlLayout.title) · \(settings.splatMovementSpeed.title) · \(settings.splatJoystickSize.title)"
+                )
+            }
         } header: {
             Text("浏览")
         } footer: {
-            Text("开启后，进入横屏沉浸浏览会优先使用设备姿态环视，仍可随时切换为触摸。")
+            Text("设备姿态设置用于全景浏览；高斯查看器的圆盘布局与界面选项会保存并应用到之后打开的所有高斯场景。")
         }
     }
 
@@ -213,6 +223,46 @@ struct SettingsView: View {
             includeMetadata: settings.syncsExternalMetadata,
             includeFiles: settings.syncsExternalFiles
         )
+    }
+}
+
+private struct SplatViewerSettingsView: View {
+    @EnvironmentObject private var settings: AppSettings
+
+    var body: some View {
+        Form {
+            Section {
+                Picker("圆盘位置", selection: $settings.splatControlLayout) {
+                    ForEach(SplatControlLayout.allCases) { layout in
+                        Text(layout.title).tag(layout)
+                    }
+                }
+
+                Picker("移动速度", selection: $settings.splatMovementSpeed) {
+                    ForEach(SplatMovementSpeed.allCases) { speed in
+                        Text(speed.title).tag(speed)
+                    }
+                }
+
+                Picker("圆盘大小", selection: $settings.splatJoystickSize) {
+                    ForEach(SplatJoystickSize.allCases) { size in
+                        Text(size.title).tag(size)
+                    }
+                }
+            } header: {
+                Text("控制设置")
+            } footer: {
+                Text("移动速度会结合每个高斯场景的实际尺寸自动调整。查看器右上角也可快速互换圆盘和切换速度。")
+            }
+
+            Section("界面展示") {
+                Toggle("默认显示控制圆盘", isOn: $settings.showsSplatControlsByDefault)
+                Toggle("显示圆盘方向提示", isOn: $settings.showsSplatJoystickGuides)
+                Toggle("显示场景信息", isOn: $settings.showsSplatSceneInfo)
+            }
+        }
+        .navigationTitle("高斯查看控制器")
+        .navigationBarTitleDisplayMode(.inline)
     }
 }
 

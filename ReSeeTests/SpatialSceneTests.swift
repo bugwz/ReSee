@@ -37,6 +37,24 @@ final class SpatialSceneTests: XCTestCase {
         XCTAssertGreaterThan(simd_dot(displacement, camera.horizontalForward), 0)
     }
 
+    @MainActor
+    func testSplatCameraAppliesMovementSpeedPreference() {
+        let standardCamera = SplatCameraController()
+        standardCamera.setMovement(SIMD2<Float>(0, -1))
+        standardCamera.advance(by: 0.05)
+
+        let fastCamera = SplatCameraController()
+        fastCamera.setMovementSpeedMultiplier(SplatMovementSpeed.fast.multiplier)
+        fastCamera.setMovement(SIMD2<Float>(0, -1))
+        fastCamera.advance(by: 0.05)
+
+        XCTAssertEqual(
+            simd_length(fastCamera.position - SIMD3<Float>(0, 0, 8)),
+            simd_length(standardCamera.position - SIMD3<Float>(0, 0, 8)) * 1.8,
+            accuracy: 0.001
+        )
+    }
+
     func testSplatSceneFramingUsesActualBoundsAndRejectsOutlierBias() {
         var positions = (0..<100).map { index in
             SIMD3<Float>(Float(index % 10), Float(index / 10), 0)
@@ -141,6 +159,12 @@ final class SpatialSceneTests: XCTestCase {
         settings.panoramaQuality = 0.87
         settings.appearance = .dark
         settings.isMotionViewingEnabled = false
+        settings.splatControlLayout = .movementOnRight
+        settings.splatMovementSpeed = .fast
+        settings.splatJoystickSize = .extraLarge
+        settings.showsSplatControlsByDefault = false
+        settings.showsSplatJoystickGuides = false
+        settings.showsSplatSceneInfo = false
 
         let restored = AppSettings(defaults: defaults)
         XCTAssertTrue(restored.isICloudSyncEnabled)
@@ -152,6 +176,12 @@ final class SpatialSceneTests: XCTestCase {
         XCTAssertEqual(restored.panoramaQuality, 0.87, accuracy: 0.001)
         XCTAssertEqual(restored.appearance, .dark)
         XCTAssertFalse(restored.isMotionViewingEnabled)
+        XCTAssertEqual(restored.splatControlLayout, .movementOnRight)
+        XCTAssertEqual(restored.splatMovementSpeed, .fast)
+        XCTAssertEqual(restored.splatJoystickSize, .extraLarge)
+        XCTAssertFalse(restored.showsSplatControlsByDefault)
+        XCTAssertFalse(restored.showsSplatJoystickGuides)
+        XCTAssertFalse(restored.showsSplatSceneInfo)
     }
 
     func testICloudSyncCopiesPanoramasAndUsesNewestSceneMetadata() async throws {

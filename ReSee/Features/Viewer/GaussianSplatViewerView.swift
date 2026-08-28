@@ -6,11 +6,13 @@ import SplatIO
 import SwiftUI
 
 struct GaussianSplatViewerView: View {
+    @EnvironmentObject private var settings: AppSettings
     let fileURL: URL
 
     @StateObject private var camera = SplatCameraController()
     @State private var loadState: SplatLoadState = .loading
     @State private var controlsVisible = true
+    @State private var hasAppliedVisibilityPreference = false
 
     var body: some View {
         ZStack {
@@ -19,9 +21,7 @@ struct GaussianSplatViewerView: View {
                 loadState = state
             }
 
-            if controlsVisible {
-                controlOverlay
-            }
+            controlOverlay
 
             statusOverlay
         }
@@ -37,41 +37,103 @@ struct GaussianSplatViewerView: View {
                 } label: {
                     Image(systemName: controlsVisible ? "gamecontroller.fill" : "gamecontroller")
                 }
+                controlSettingsMenu
             }
             .buttonStyle(SplatOverlayButtonStyle())
             .padding(12)
+        }
+        .onAppear {
+            camera.setMovementSpeedMultiplier(settings.splatMovementSpeed.multiplier)
+            guard !hasAppliedVisibilityPreference else { return }
+            controlsVisible = settings.showsSplatControlsByDefault
+            hasAppliedVisibilityPreference = true
+        }
+        .onChange(of: settings.splatMovementSpeed) { _, speed in
+            camera.setMovementSpeedMultiplier(speed.multiplier)
         }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Gaussian Splatting 自由空间查看器")
     }
 
     private var controlOverlay: some View {
-        VStack {
-            HStack {
-                Label("6DoF", systemImage: "move.3d")
+        GeometryReader { geometry in
+            let horizontalInset = max(geometry.safeAreaInsets.leading, 18)
+            let bottomInset = max(geometry.safeAreaInsets.bottom, 16)
+            let availableDiameter = max((geometry.size.width - horizontalInset * 2 - 28) / 2, 96)
+            let diameter = min(settings.splatJoystickSize.diameter, availableDiameter)
+
+            VStack {
+                if settings.showsSplatSceneInfo {
+                    HStack {
+                        Label("6DoF", systemImage: "move.3d")
+                        Spacer()
+                        Text("MetalSplatter")
+                    }
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.white.opacity(0.82))
+                    .padding(.leading, horizontalInset)
+                    .padding(.top, max(geometry.safeAreaInsets.top, 12))
+                    .padding(.trailing, 156)
+                }
                 Spacer()
-                Text("MetalSplatter")
+                if controlsVisible {
+                    HStack(alignment: .bottom) {
+                        joystick(for: leadingControl, diameter: diameter)
+                        Spacer(minLength: 28)
+                        joystick(for: trailingControl, diameter: diameter)
+                    }
+                    .padding(.horizontal, horizontalInset)
+                    .padding(.bottom, bottomInset)
+                    .transition(.opacity.combined(with: .scale(scale: 0.94, anchor: .bottom)))
+                }
             }
-            .font(.caption.weight(.semibold))
-            .foregroundStyle(.white.opacity(0.82))
-            .padding(12)
-            Spacer()
-            HStack(alignment: .bottom) {
-                SplatJoystick(
-                    title: "前后左右",
-                    systemImage: "move.3d",
-                    onChanged: camera.setMovement
-                )
-                Spacer()
-                SplatJoystick(
-                    title: "无级视角",
-                    systemImage: "scope",
-                    onChanged: camera.setLook
-                )
-            }
-            .padding(.horizontal, 18)
-            .padding(.bottom, 20)
         }
+        .animation(.easeInOut(duration: 0.2), value: controlsVisible)
+    }
+
+    private var leadingControl: SplatControl {
+        settings.splatControlLayout == .movementOnLeft ? .movement : .look
+    }
+
+    private var trailingControl: SplatControl {
+        settings.splatControlLayout == .movementOnLeft ? .look : .movement
+    }
+
+    private func joystick(for control: SplatControl, diameter: CGFloat) -> some View {
+        SplatJoystick(
+            title: control.accessibilityTitle,
+            systemImage: control.systemImage,
+            diameter: diameter,
+            showsGuides: settings.showsSplatJoystickGuides,
+            onChanged: control == .movement ? camera.setMovement : camera.setLook
+        )
+    }
+
+    private var controlSettingsMenu: some View {
+        Menu {
+            Button {
+                settings.splatControlLayout = settings.splatControlLayout == .movementOnLeft
+                    ? .movementOnRight
+                    : .movementOnLeft
+            } label: {
+                Label("左右互换", systemImage: "arrow.left.arrow.right")
+            }
+
+            Picker("移动速度", selection: $settings.splatMovementSpeed) {
+                ForEach(SplatMovementSpeed.allCases) { speed in
+                    Text(speed.title).tag(speed)
+                }
+            }
+
+            Picker("圆盘大小", selection: $settings.splatJoystickSize) {
+                ForEach(SplatJoystickSize.allCases) { size in
+                    Text(size.title).tag(size)
+                }
+            }
+        } label: {
+            Image(systemName: "slider.horizontal.3")
+        }
+        .accessibilityLabel("控制器设置")
     }
 
     @ViewBuilder
@@ -118,6 +180,25 @@ struct GaussianSplatViewerView: View {
     }
 }
 
+private enum SplatControl: Equatable {
+    case movement
+    case look
+
+    var accessibilityTitle: String {
+        switch self {
+        case .movement: "移动"
+        case .look: "视角"
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .movement: "move.3d"
+        case .look: "scope"
+        }
+    }
+}
+
 private enum SplatLoadState: Equatable {
     case loading
     case revealing(loaded: Int, total: Int)
@@ -146,6 +227,7 @@ final class SplatCameraController: ObservableObject {
     private(set) var look = SIMD2<Float>.zero
     private var initialPosition = SIMD3<Float>(0, 0, 8)
     private var movementSpeed: Float = 2.2
+    private var movementSpeedMultiplier: Float = 1
 
     func setMovement(_ value: SIMD2<Float>) {
         movement = SplatJoystickMapping.movement(value)
@@ -153,6 +235,10 @@ final class SplatCameraController: ObservableObject {
 
     func setLook(_ value: SIMD2<Float>) {
         look = SplatJoystickMapping.look(value)
+    }
+
+    func setMovementSpeedMultiplier(_ multiplier: Float) {
+        movementSpeedMultiplier = multiplier
     }
 
     func frame(_ framing: SplatSceneFraming) {
@@ -181,7 +267,7 @@ final class SplatCameraController: ObservableObject {
         position += (
             horizontalRight * movement.x
                 + horizontalForward * -movement.y
-        ) * movementSpeed * frameTime
+        ) * movementSpeed * movementSpeedMultiplier * frameTime
     }
 
     var horizontalForward: SIMD3<Float> {
@@ -277,61 +363,60 @@ struct SplatSceneFraming: Equatable {
 private struct SplatJoystick: View {
     let title: String
     let systemImage: String
+    let diameter: CGFloat
+    let showsGuides: Bool
     let onChanged: (SIMD2<Float>) -> Void
 
     @State private var knobOffset = CGSize.zero
 
-    private let radius: CGFloat = 48
+    private var radius: CGFloat { diameter / 2 }
 
     var body: some View {
-        VStack(spacing: 7) {
-            ZStack {
-                Circle()
-                    .fill(.black.opacity(0.46))
-                    .overlay { Circle().stroke(.white.opacity(0.3), lineWidth: 1) }
+        ZStack {
+            Circle()
+                .fill(.black.opacity(0.46))
+                .overlay { Circle().stroke(.white.opacity(0.3), lineWidth: 1) }
+            if showsGuides {
                 Image(systemName: "chevron.up")
-                    .offset(y: -radius + 12)
+                    .offset(y: -radius + 15)
                 Image(systemName: "chevron.down")
-                    .offset(y: radius - 12)
+                    .offset(y: radius - 15)
                 Image(systemName: "chevron.left")
-                    .offset(x: -radius + 12)
+                    .offset(x: -radius + 15)
                 Image(systemName: "chevron.right")
-                    .offset(x: radius - 12)
-                Circle()
-                    .fill(.white.opacity(0.82))
-                    .frame(width: 42, height: 42)
-                    .overlay { Image(systemName: systemImage).foregroundStyle(.black.opacity(0.72)) }
-                    .offset(knobOffset)
+                    .offset(x: radius - 15)
             }
-            .frame(width: radius * 2, height: radius * 2)
-            .foregroundStyle(.white.opacity(0.42))
-            .contentShape(Circle())
-            .gesture(
-                DragGesture(minimumDistance: 0)
-                    .onChanged { value in
-                        let vector = CGSize(
-                            width: value.location.x - radius,
-                            height: value.location.y - radius
-                        )
-                        let length = max(hypot(vector.width, vector.height), 1)
-                        let scale = min(1, radius / length)
-                        knobOffset = CGSize(width: vector.width * scale, height: vector.height * scale)
-                        onChanged(SIMD2(
-                            Float(knobOffset.width / radius),
-                            Float(knobOffset.height / radius)
-                        ))
-                    }
-                    .onEnded { _ in
-                        withAnimation(.spring(response: 0.25, dampingFraction: 0.72)) {
-                            knobOffset = .zero
-                        }
-                        onChanged(.zero)
-                    }
-            )
-            Text(title)
-                .font(.caption2.weight(.semibold))
-                .foregroundStyle(.white.opacity(0.82))
+            Circle()
+                .fill(.white.opacity(0.82))
+                .frame(width: diameter * 0.38, height: diameter * 0.38)
+                .overlay { Image(systemName: systemImage).foregroundStyle(.black.opacity(0.72)) }
+                .offset(knobOffset)
         }
+        .frame(width: diameter, height: diameter)
+        .foregroundStyle(.white.opacity(0.42))
+        .contentShape(Circle())
+        .gesture(
+            DragGesture(minimumDistance: 0)
+                .onChanged { value in
+                    let vector = CGSize(
+                        width: value.location.x - radius,
+                        height: value.location.y - radius
+                    )
+                    let length = max(hypot(vector.width, vector.height), 1)
+                    let scale = min(1, radius / length)
+                    knobOffset = CGSize(width: vector.width * scale, height: vector.height * scale)
+                    onChanged(SIMD2(
+                        Float(knobOffset.width / radius),
+                        Float(knobOffset.height / radius)
+                    ))
+                }
+                .onEnded { _ in
+                    withAnimation(.spring(response: 0.25, dampingFraction: 0.72)) {
+                        knobOffset = .zero
+                    }
+                    onChanged(.zero)
+                }
+        )
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(title)
         .accessibilityHint("拖动摇杆控制\(title)")
