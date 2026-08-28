@@ -78,7 +78,32 @@ struct GaussianSplatViewerView: View {
     private var statusOverlay: some View {
         switch loadState {
         case .loading:
-            GaussianParticleLoadingView()
+            VStack(spacing: 10) {
+                ProgressView()
+                    .tint(.white)
+                Text("正在解析高斯场景")
+                    .font(.subheadline.weight(.semibold))
+            }
+            .foregroundStyle(.white)
+            .padding(.horizontal, 24)
+            .padding(.vertical, 18)
+            .background(.black.opacity(0.7), in: RoundedRectangle(cornerRadius: 16))
+        case let .revealing(loaded, total):
+            VStack {
+                HStack(spacing: 8) {
+                    ProgressView(value: Double(loaded), total: Double(max(total, 1)))
+                        .tint(.white)
+                        .frame(width: 92)
+                    Text("真实粒子显影 \(loaded.formatted()) / \(total.formatted())")
+                }
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.white.opacity(0.88))
+                .padding(.horizontal, 12)
+                .padding(.vertical, 9)
+                .background(.black.opacity(0.62), in: Capsule())
+                Spacer()
+            }
+            .padding(.top, 14)
         case let .failed(message):
             ContentUnavailableView(
                 "无法显示高斯场景",
@@ -95,43 +120,51 @@ struct GaussianSplatViewerView: View {
 
 private enum SplatLoadState: Equatable {
     case loading
+    case revealing(loaded: Int, total: Int)
     case ready
     case failed(String)
 }
 
 enum SplatJoystickMapping {
     static func movement(_ screenVector: SIMD2<Float>) -> SIMD2<Float> {
-        -screenVector
+        screenVector
     }
 
     static func look(_ screenVector: SIMD2<Float>) -> SIMD2<Float> {
-        -screenVector
+        screenVector
     }
 }
 
 @MainActor
-private final class SplatCameraController: ObservableObject {
-    var position = SIMD3<Float>(0, 0, 8)
-    var yaw: Float = 0
-    var pitch: Float = 0
+final class SplatCameraController: ObservableObject {
+    private(set) var position = SIMD3<Float>(0, 0, 8)
+    private(set) var yaw: Float = 0
+    private(set) var pitch: Float = 0
+    private(set) var nearZ: Float = 0.01
+    private(set) var farZ: Float = 500
     private(set) var movement = SIMD2<Float>.zero
     private(set) var look = SIMD2<Float>.zero
+    private var initialPosition = SIMD3<Float>(0, 0, 8)
+    private var movementSpeed: Float = 2.2
 
     func setMovement(_ value: SIMD2<Float>) {
-        // MTKView renders through an inverse view transform. Convert the
-        // screen-space joystick vector once at the input boundary so dragging
-        // toward a direction moves the visible viewpoint in that direction.
         movement = SplatJoystickMapping.movement(value)
     }
 
     func setLook(_ value: SIMD2<Float>) {
-        // Keep free-look consistent with direct manipulation: dragging right
-        // turns right and dragging up raises the view after view inversion.
         look = SplatJoystickMapping.look(value)
     }
 
+    func frame(_ framing: SplatSceneFraming) {
+        initialPosition = framing.center + SIMD3<Float>(0, 0, framing.cameraDistance)
+        movementSpeed = framing.movementSpeed
+        nearZ = framing.nearZ
+        farZ = framing.farZ
+        reset()
+    }
+
     func reset() {
-        position = SIMD3<Float>(0, 0, 8)
+        position = initialPosition
         yaw = 0
         pitch = 0
         movement = .zero
@@ -140,13 +173,32 @@ private final class SplatCameraController: ObservableObject {
 
     func advance(by elapsed: Float) {
         let frameTime = min(max(elapsed, 0), 0.05)
-        yaw += look.x * frameTime * 1.35
+        // The phone is the observer's window: right means turn right and an
+        // upward screen vector means lift the observer's gaze.
+        yaw -= look.x * frameTime * 1.35
         pitch = min(max(pitch - look.y * frameTime * 1.2, -.pi * 0.48), .pi * 0.48)
 
-        let forward = SIMD3<Float>(sin(yaw), 0, -cos(yaw))
-        let right = SIMD3<Float>(cos(yaw), 0, sin(yaw))
-        let speed: Float = 2.2
-        position += (right * movement.x + forward * -movement.y) * speed * frameTime
+        position += (
+            horizontalRight * movement.x
+                + horizontalForward * -movement.y
+        ) * movementSpeed * frameTime
+    }
+
+    var horizontalForward: SIMD3<Float> {
+        SIMD3<Float>(-sin(yaw), 0, -cos(yaw))
+    }
+
+    var horizontalRight: SIMD3<Float> {
+        SIMD3<Float>(cos(yaw), 0, -sin(yaw))
+    }
+
+    var viewingDirection: SIMD3<Float> {
+        let horizontal = cos(pitch)
+        return SIMD3<Float>(
+            -sin(yaw) * horizontal,
+            sin(pitch),
+            -cos(yaw) * horizontal
+        )
     }
 
     var viewMatrix: simd_float4x4 {
@@ -158,6 +210,67 @@ private final class SplatCameraController: ObservableObject {
             axis: SIMD3<Float>(0, 0, 1)
         )
         return pitchRotation * yawRotation * translation * commonDatasetCalibration
+    }
+}
+
+struct SplatSceneFraming: Equatable {
+    let center: SIMD3<Float>
+    let radius: Float
+    let cameraDistance: Float
+    let movementSpeed: Float
+    let nearZ: Float
+    let farZ: Float
+
+    static func fitted(to positions: [SIMD3<Float>]) -> SplatSceneFraming {
+        let finitePositions = positions.filter {
+            $0.x.isFinite && $0.y.isFinite && $0.z.isFinite
+        }
+        guard !finitePositions.isEmpty else {
+            return SplatSceneFraming(
+                center: .zero,
+                radius: 4,
+                cameraDistance: 8,
+                movementSpeed: 2.2,
+                nearZ: 0.01,
+                farZ: 500
+            )
+        }
+
+        let maximumSampleCount = 20_000
+        let stride = max(finitePositions.count / maximumSampleCount, 1)
+        let sample = Swift.stride(from: 0, to: finitePositions.count, by: stride).map {
+            calibratedPosition(finitePositions[$0])
+        }
+        let xRange = percentileRange(sample.map(\.x))
+        let yRange = percentileRange(sample.map(\.y))
+        let zRange = percentileRange(sample.map(\.z))
+        let lower = SIMD3<Float>(xRange.lowerBound, yRange.lowerBound, zRange.lowerBound)
+        let upper = SIMD3<Float>(xRange.upperBound, yRange.upperBound, zRange.upperBound)
+        let center = (lower + upper) * 0.5
+        let halfExtent = (upper - lower) * 0.5
+        let radius = max(simd_length(halfExtent), 0.1)
+        let cameraDistance = max(radius * 1.9, 0.5)
+
+        return SplatSceneFraming(
+            center: center,
+            radius: radius,
+            cameraDistance: cameraDistance,
+            movementSpeed: max(radius * 0.45, 0.15),
+            nearZ: max(radius * 0.001, 0.005),
+            farZ: max(cameraDistance + radius * 8, 100)
+        )
+    }
+
+    static func calibratedPosition(_ position: SIMD3<Float>) -> SIMD3<Float> {
+        SIMD3<Float>(-position.x, -position.y, position.z)
+    }
+
+    private static func percentileRange(_ values: [Float]) -> ClosedRange<Float> {
+        let sorted = values.sorted()
+        guard sorted.count >= 20 else { return sorted[0]...sorted[sorted.count - 1] }
+        let lowerIndex = Int(Float(sorted.count - 1) * 0.01)
+        let upperIndex = Int(Float(sorted.count - 1) * 0.99)
+        return sorted[lowerIndex]...sorted[upperIndex]
     }
 }
 
@@ -225,72 +338,6 @@ private struct SplatJoystick: View {
     }
 }
 
-private struct GaussianParticleLoadingView: View {
-    var body: some View {
-        VStack(spacing: 8) {
-            TimelineView(.animation(minimumInterval: 1 / 30)) { timeline in
-                Canvas { context, size in
-                    let time = timeline.date.timeIntervalSinceReferenceDate
-                    let center = CGPoint(x: size.width / 2, y: size.height / 2)
-                    context.blendMode = .plusLighter
-
-                    for index in 0..<56 {
-                        let seed = Double(index) * 0.61803398875
-                        let angle = seed * .pi * 2 + time * (0.16 + Double(index % 5) * 0.025)
-                        let pulse = 0.72 + 0.28 * sin(time * 1.7 + seed * 9)
-                        let orbitX = (28 + Double(index % 9) * 5.5) * pulse
-                        let orbitY = (16 + Double(index % 7) * 3.8) * pulse
-                        let depth = 0.52 + 0.48 * sin(angle * 1.4 + seed * 4)
-                        let radius = 1.6 + depth * 3.8
-                        let point = CGPoint(
-                            x: center.x + cos(angle) * orbitX,
-                            y: center.y + sin(angle * 1.13) * orbitY
-                        )
-                        let color = particleColor(index: index, opacity: 0.22 + depth * 0.55)
-                        let rect = CGRect(
-                            x: point.x - radius * 1.7,
-                            y: point.y - radius,
-                            width: radius * 3.4,
-                            height: radius * 2
-                        )
-                        context.fill(
-                            Path(ellipseIn: rect),
-                            with: .radialGradient(
-                                Gradient(colors: [color, color.opacity(0)]),
-                                center: point,
-                                startRadius: 0,
-                                endRadius: radius * 1.7
-                            )
-                        )
-                    }
-                }
-            }
-            .frame(width: 220, height: 138)
-
-            Text("正在聚合高斯粒子")
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(.white)
-            Text("解析位置、尺度、颜色与球谐数据…")
-                .font(.caption)
-                .foregroundStyle(.white.opacity(0.66))
-        }
-        .padding(.horizontal, 24)
-        .padding(.vertical, 16)
-        .background(.black.opacity(0.7), in: RoundedRectangle(cornerRadius: 16))
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("正在解析并载入高斯场景")
-    }
-
-    private func particleColor(index: Int, opacity: Double) -> Color {
-        switch index % 4 {
-        case 0: AppTheme.accent.opacity(opacity)
-        case 1: AppTheme.highlight.opacity(opacity)
-        case 2: Color.cyan.opacity(opacity)
-        default: Color.white.opacity(opacity * 0.82)
-        }
-    }
-}
-
 private struct SplatOverlayButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
@@ -331,7 +378,7 @@ private struct GaussianMetalView: UIViewRepresentable {
         )
         context.coordinator.renderer = renderer
         view.delegate = renderer
-        Task { await renderer?.load(fileURL) }
+        context.coordinator.loadTask = Task { await renderer?.load(fileURL) }
         return view
     }
 
@@ -340,6 +387,8 @@ private struct GaussianMetalView: UIViewRepresentable {
     static func dismantleUIView(_ view: MTKView, coordinator: GaussianMetalRenderer.Coordinator) {
         view.isPaused = true
         view.delegate = nil
+        coordinator.loadTask?.cancel()
+        coordinator.loadTask = nil
         coordinator.renderer = nil
     }
 }
@@ -348,6 +397,7 @@ private struct GaussianMetalView: UIViewRepresentable {
 private final class GaussianMetalRenderer: NSObject, MTKViewDelegate {
     final class Coordinator {
         var renderer: GaussianMetalRenderer?
+        var loadTask: Task<Void, Never>?
     }
 
     private weak var view: MTKView?
@@ -383,14 +433,33 @@ private final class GaussianMetalRenderer: NSObject, MTKViewDelegate {
                 sampleCount: view.sampleCount,
                 maxViewCount: 1,
                 maxSimultaneousRenders: 3,
-                highQualityDepth: false,
+                highQualityDepth: true,
                 clearColor: view.clearColor
             )
             let points = try await AutodetectSceneReader(url).readAll()
-            let chunk = try SplatChunk(device: device, from: points)
-            await renderer.addChunk(chunk)
-            self.renderer = renderer
+            guard !points.isEmpty else {
+                throw SplatViewerError.emptyScene
+            }
+            camera.frame(SplatSceneFraming.fitted(to: points.map(\.position)))
+
+            let revealBatchSize = max(10_000, (points.count + 89) / 90)
+            var loadedCount = 0
+            while loadedCount < points.count {
+                try Task.checkCancellation()
+                let endIndex = min(loadedCount + revealBatchSize, points.count)
+                let chunk = try SplatChunk(
+                    device: device,
+                    from: Array(points[loadedCount..<endIndex])
+                )
+                await renderer.addChunk(chunk)
+                loadedCount = endIndex
+                self.renderer = renderer
+                onLoadStateChanged(.revealing(loaded: loadedCount, total: points.count))
+                try await Task.sleep(for: .milliseconds(16))
+            }
             onLoadStateChanged(.ready)
+        } catch is CancellationError {
+            renderer = nil
         } catch {
             renderer = nil
             onLoadStateChanged(.failed(error.localizedDescription))
@@ -415,8 +484,8 @@ private final class GaussianMetalRenderer: NSObject, MTKViewDelegate {
         let projection = splatPerspective(
             verticalFieldOfView: 65 * .pi / 180,
             aspectRatio: Float(drawableSize.width / drawableSize.height),
-            nearZ: 0.05,
-            farZ: 500
+            nearZ: camera.nearZ,
+            farZ: camera.farZ
         )
         let viewport = SplatRenderer.ViewportDescriptor(
             viewport: MTLViewport(
@@ -452,6 +521,14 @@ private final class GaussianMetalRenderer: NSObject, MTKViewDelegate {
 
     func mtkView(_ view: MTKView, drawableSizeWillChange size: CGSize) {
         drawableSize = size
+    }
+}
+
+private enum SplatViewerError: LocalizedError {
+    case emptyScene
+
+    var errorDescription: String? {
+        "高斯文件中没有可显示的粒子。"
     }
 }
 

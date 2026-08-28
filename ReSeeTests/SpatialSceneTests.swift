@@ -5,15 +5,51 @@ import XCTest
 @testable import ReSee
 
 final class SpatialSceneTests: XCTestCase {
-    func testSplatJoysticksConvertScreenDragIntoViewCoordinates() {
+    func testSplatJoysticksPreserveScreenDirection() {
         XCTAssertEqual(
             SplatJoystickMapping.movement(SIMD2<Float>(0.75, -0.5)),
-            SIMD2<Float>(-0.75, 0.5)
+            SIMD2<Float>(0.75, -0.5)
         )
         XCTAssertEqual(
             SplatJoystickMapping.look(SIMD2<Float>(-0.4, 0.8)),
-            SIMD2<Float>(0.4, -0.8)
+            SIMD2<Float>(-0.4, 0.8)
         )
+    }
+
+    @MainActor
+    func testSplatCameraUsesObserverRelativeDirections() {
+        let camera = SplatCameraController()
+
+        camera.setLook(SIMD2<Float>(1, -1))
+        camera.advance(by: 0.05)
+
+        XCTAssertLessThan(camera.yaw, 0, "向右应转向观察者右侧")
+        XCTAssertGreaterThan(camera.pitch, 0, "向上应模拟观察者抬头")
+        XCTAssertGreaterThan(camera.viewingDirection.x, 0)
+        XCTAssertGreaterThan(camera.viewingDirection.y, 0)
+
+        camera.setLook(.zero)
+        let positionBeforeMoving = camera.position
+        camera.setMovement(SIMD2<Float>(0, -1))
+        camera.advance(by: 0.05)
+        let displacement = camera.position - positionBeforeMoving
+
+        XCTAssertGreaterThan(simd_dot(displacement, camera.horizontalForward), 0)
+    }
+
+    func testSplatSceneFramingUsesActualBoundsAndRejectsOutlierBias() {
+        var positions = (0..<100).map { index in
+            SIMD3<Float>(Float(index % 10), Float(index / 10), 0)
+        }
+        positions.append(SIMD3<Float>(10_000, 10_000, 10_000))
+
+        let framing = SplatSceneFraming.fitted(to: positions)
+
+        XCTAssertEqual(framing.center.x, -4.5, accuracy: 0.01)
+        XCTAssertEqual(framing.center.y, -4.5, accuracy: 0.01)
+        XCTAssertEqual(framing.center.z, 0, accuracy: 0.01)
+        XCTAssertLessThan(framing.radius, 10)
+        XCTAssertGreaterThan(framing.cameraDistance, framing.radius)
     }
 
     func testExternalAssetFormatClassifiesSupportedFiles() throws {
